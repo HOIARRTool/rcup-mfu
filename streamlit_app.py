@@ -7,7 +7,6 @@ import json
 import html
 from datetime import datetime, date, time
 from typing import Any, Dict, List, Optional, Tuple
-from io import BytesIO
 
 import pandas as pd
 import requests
@@ -135,7 +134,7 @@ st.markdown(
 
 
 # =========================
-# LOGIN
+# LOGIN / APP STATE
 # =========================
 
 def ensure_auth_state():
@@ -143,6 +142,14 @@ def ensure_auth_state():
         st.session_state.authenticated = False
     if "login_username" not in st.session_state:
         st.session_state.login_username = ""
+
+    # โหมดหน้าจอพรีวิวก้างปลาเดี่ยว
+    if "app_mode" not in st.session_state:
+        st.session_state.app_mode = "main"  # main | fishbone_preview
+    if "fishbone_preview_effect" not in st.session_state:
+        st.session_state.fishbone_preview_effect = ""
+    if "fishbone_preview_categories" not in st.session_state:
+        st.session_state.fishbone_preview_categories = []
 
 
 def render_login():
@@ -462,7 +469,7 @@ def build_plan_prompt(incident_text: str, analysis_json: Dict[str, Any]) -> str:
     """.strip()
 
 
-def fishbone_svg(effect: str, categories: List[Dict[str, Any]]) -> str:
+def fishbone_svg(effect: str, categories: List[Dict[str, Any]], display_height: int = 650) -> str:
     """
     Executive-friendly fishbone:
     - เน้นอ่านง่ายสำหรับผู้บริหาร
@@ -470,7 +477,6 @@ def fishbone_svg(effect: str, categories: List[Dict[str, Any]]) -> str:
     - แสดงสาเหตุหลักหมวดละ 1-2 ข้อบนภาพ
     - รายละเอียดเต็มให้ดูใน expander ด้านล่าง
     """
-    # ===== helper =====
     def esc(s: str) -> str:
         return html.escape(str(s or ""))
 
@@ -486,12 +492,10 @@ def fishbone_svg(effect: str, categories: List[Dict[str, Any]]) -> str:
             lines[-1] = lines[-1][:-1] + "…"
         return lines
 
-    # ===== เตรียมหมวด (คัดให้เหลือ 4 หมวด + top 2 items/หมวด) =====
     raw = categories or []
     if not raw:
         raw = [{"label": "ยังไม่มีข้อมูล", "items": []}]
 
-    # เอาแค่ 4 หมวดแรก (เวอร์ชันผู้บริหาร)
     raw = raw[:4]
 
     cats = []
@@ -499,14 +503,12 @@ def fishbone_svg(effect: str, categories: List[Dict[str, Any]]) -> str:
         items = [str(x) for x in (c.get("items", []) or []) if str(x).strip()]
         cats.append({
             "label": str(c.get("label", "")).strip() or "ไม่ระบุ",
-            "items": items[:2],  # แสดงบนภาพแค่ 2 ข้อ
+            "items": items[:2],
         })
 
-    # ถ้าน้อยกว่า 4 หมวด เติมช่องว่างให้ layout คงรูป
     while len(cats) < 4:
         cats.append({"label": "", "items": []})
 
-    # ===== canvas =====
     W, H = 1500, 820
     spine_y = 410
     spine_x1 = 140
@@ -516,24 +518,20 @@ def fishbone_svg(effect: str, categories: List[Dict[str, Any]]) -> str:
     head_w = 350
     head_h = 210
 
-    # จุดต่อกระดูกกับแกนหลัก (fixed layout 4 ช่อง)
     anchors = [
-        {"x": 460, "y": 250, "top": True},   # บนซ้าย
-        {"x": 810, "y": 250, "top": True},   # บนขวา
-        {"x": 560, "y": 570, "top": False},  # ล่างซ้าย
-        {"x": 910, "y": 570, "top": False},  # ล่างขวา
+        {"x": 460, "y": 250, "top": True},
+        {"x": 810, "y": 250, "top": True},
+        {"x": 560, "y": 570, "top": False},
+        {"x": 910, "y": 570, "top": False},
     ]
 
-    # ปลายกระดูกชี้ไปทางซ้าย
     end_dx = 220
 
-    # ===== layers =====
     lines_layer = []
     text_layer = []
 
-    # วาดกระดูกแต่ละหมวด
     for i, c in enumerate(cats):
-        if not c["label"]:  # ช่องว่าง (padding)
+        if not c["label"]:
             continue
 
         a = anchors[i]
@@ -542,12 +540,10 @@ def fishbone_svg(effect: str, categories: List[Dict[str, Any]]) -> str:
         is_top = a["top"]
         end_x = x - end_dx
 
-        # กระดูกหลักของหมวด
         lines_layer.append(
             f'<line x1="{x}" y1="{spine_y}" x2="{end_x}" y2="{end_y}" stroke="#334155" stroke-width="3"/>'
         )
 
-        # เวคเตอร์
         dx = end_x - x
         dy = end_y - spine_y
         ln = (dx**2 + dy**2) ** 0.5 or 1
@@ -556,7 +552,6 @@ def fishbone_svg(effect: str, categories: List[Dict[str, Any]]) -> str:
         if is_top:
             px, py = -px, -py
 
-        # ===== กล่องหัวหมวด (วางปลายสุด) =====
         label_w = 260
         label_h = 40
         label_x = end_x - label_w - 10
@@ -569,7 +564,6 @@ def fishbone_svg(effect: str, categories: List[Dict[str, Any]]) -> str:
             f'font-family="Sarabun, Noto Sans Thai, sans-serif" fill="#0f172a">{esc(c["label"])}</text>'
         )
 
-        # ===== ribs (แสดง 1-2 ข้อแบบอ่านง่าย) =====
         ribs_f = [0.35, 0.58]
         rib_len = 42
 
@@ -580,16 +574,13 @@ def fishbone_svg(effect: str, categories: List[Dict[str, Any]]) -> str:
             ex = sx + px * rib_len
             ey = sy + py * rib_len
 
-            # เส้น rib
             lines_layer.append(
                 f'<line x1="{sx}" y1="{sy}" x2="{ex}" y2="{ey}" stroke="#64748b" stroke-width="2"/>'
             )
 
-            # กล่องข้อความ rib (กันเส้นทับ)
             tx = ex + px * 8
             ty = ey + (-8 if is_top else 16)
 
-            # จำกัดความยาวข้อความบนรูป
             item_short = str(item).strip()
             if len(item_short) > 38:
                 item_short = item_short[:37] + "…"
@@ -606,15 +597,16 @@ def fishbone_svg(effect: str, categories: List[Dict[str, Any]]) -> str:
                 f'font-family="Sarabun, Noto Sans Thai, sans-serif" fill="#0f172a">{esc(item_short)}</text>'
             )
 
-    # ===== effect box =====
     effect_lines = wrap_text(effect or "เหตุการณ์ / ผลลัพธ์", n=20, max_lines=5)
     effect_tspan = "".join(
-        [f'<tspan x="{head_x + head_w/2}" dy="{0 if idx==0 else 20}">{esc(line)}</tspan>'
-         for idx, line in enumerate(effect_lines)]
+        [
+            f'<tspan x="{head_x + head_w/2}" dy="{0 if idx == 0 else 20}">{esc(line)}</tspan>'
+            for idx, line in enumerate(effect_lines)
+        ]
     )
 
     svg = f"""
-    <svg viewBox="0 0 {W} {H}" width="100%" height="650" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 {W} {H}" width="100%" height="{display_height}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <marker id="arrowHead" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto">
           <path d="M0,0 L14,7 L0,14 Z" fill="#0ea5e9"/>
@@ -653,37 +645,54 @@ def fishbone_svg(effect: str, categories: List[Dict[str, Any]]) -> str:
     return svg
 
 
-def fishbone_svg_to_jpg_bytes(svg_str: str, output_width: int = 2200, jpg_quality: int = 95) -> bytes:
-    """
-    แปลง SVG (string) -> JPG bytes สำหรับดาวน์โหลดใน Streamlit
-    ต้องมีแพ็กเกจ: cairosvg, Pillow
-    """
-    try:
-        import cairosvg
-    except ImportError:
-        raise RuntimeError("ยังไม่ได้ติดตั้ง cairosvg (เพิ่มใน requirements.txt)")
+def open_fishbone_preview(effect: str, categories: List[Dict[str, Any]]) -> None:
+    st.session_state.fishbone_preview_effect = effect or ""
+    st.session_state.fishbone_preview_categories = categories or []
+    st.session_state.app_mode = "fishbone_preview"
+    st.rerun()
 
-    try:
-        from PIL import Image
-    except ImportError:
-        raise RuntimeError("ยังไม่ได้ติดตั้ง Pillow (เพิ่มใน requirements.txt)")
 
-    # แปลง SVG -> PNG bytes ก่อน
-    png_bytes = cairosvg.svg2png(
-        bytestring=svg_str.encode("utf-8"),
-        output_width=output_width
-    )
+def render_fishbone_preview_page():
+    st.markdown("# 🔍 พรีวิวแผนผังก้างปลา")
+    st.caption("โหมดพรีวิวเดี่ยวสำหรับแสดงเต็มหน้าเพื่อให้จับภาพหน้าจอได้ง่าย")
 
-    # เปิดเป็น RGBA เพื่อเก็บ alpha แล้วปูพื้นขาวก่อนแปลงเป็น JPG
-    img_rgba = Image.open(BytesIO(png_bytes)).convert("RGBA")
+    c1, c2, c3 = st.columns([1.2, 1.2, 4])
+    with c1:
+        if st.button("⬅️ กลับหน้าหลัก", use_container_width=True):
+            st.session_state.app_mode = "main"
+            st.rerun()
+    with c2:
+        if st.button("🚪 Logout", use_container_width=True):
+            st.session_state.authenticated = False
+            st.session_state.login_username = ""
+            st.session_state.app_mode = "main"
+            st.rerun()
 
-    white_bg = Image.new("RGB", img_rgba.size, (255, 255, 255))
-    white_bg.paste(img_rgba, mask=img_rgba.split()[-1])  # ใช้ alpha channel เป็น mask
+    effect = st.session_state.get("fishbone_preview_effect", "") or "เหตุการณ์ / ผลลัพธ์"
+    categories = st.session_state.get("fishbone_preview_categories", []) or []
 
-    out = BytesIO()
-    white_bg.save(out, format="JPEG", quality=jpg_quality, optimize=True)
-    out.seek(0)
-    return out.getvalue()
+    st.markdown("---")
+
+    ctrl1, ctrl2 = st.columns([1.2, 2.4])
+    with ctrl1:
+        preview_height = st.slider("ความสูงพรีวิว", min_value=700, max_value=1400, value=1080, step=20)
+    with ctrl2:
+        st.info("แนะนำ: ซ่อน sidebar ของ Streamlit และซูมเบราว์เซอร์ 100–125% เพื่อแคปหน้าจอให้คมชัด")
+
+    svg = fishbone_svg(effect, categories, display_height=preview_height - 80)
+
+    st.markdown("<div class='fishbone-wrap'>", unsafe_allow_html=True)
+    components.html(svg, height=preview_height, scrolling=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    if categories:
+        with st.expander("ดูรายละเอียดสาเหตุทั้งหมด (ฉบับเต็ม)"):
+            cols = st.columns(2)
+            for idx, c in enumerate(categories):
+                with cols[idx % 2]:
+                    st.markdown(f"**{c.get('label','-')}**")
+                    for item in (c.get("items", []) or []):
+                        st.markdown(f"- {item}")
 
 
 def render_analysis_result(analysis: Dict[str, Any]):
@@ -708,23 +717,14 @@ def render_analysis_result(analysis: Dict[str, Any]):
     effect = fishbone.get("effect", "") or analysis.get("event_summary", "เหตุการณ์ / ผลลัพธ์")
     categories = fishbone.get("categories", []) or []
 
-    svg = fishbone_svg(effect, categories)
+    svg = fishbone_svg(effect, categories, display_height=650)
     st.markdown("<div class='fishbone-wrap'>", unsafe_allow_html=True)
-    components.html(svg, height=580, scrolling=True)
+    components.html(svg, height=700, scrolling=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ปุ่มดาวน์โหลดแผนผังก้างปลาเป็น JPG
-    try:
-        jpg_bytes = fishbone_svg_to_jpg_bytes(svg, output_width=2200, jpg_quality=95)
-        st.download_button(
-            "🖼️ ดาวน์โหลดแผนผังก้างปลา (JPG)",
-            data=jpg_bytes,
-            file_name=f"fishbone_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg",
-            mime="image/jpeg",
-            use_container_width=False,
-        )
-    except Exception as e:
-        st.caption(f"ยังไม่สามารถสร้างไฟล์ JPG ได้: {e}")
+    # ปุ่มเปิดหน้าพรีวิวก้างปลาเดี่ยว (สำหรับ capture)
+    if st.button("🔍 เปิดหน้าพรีวิวก้างปลาเดี่ยว", use_container_width=True):
+        open_fishbone_preview(effect=effect, categories=categories)
 
     if categories:
         with st.expander("ดูรายละเอียดสาเหตุทั้งหมด (ฉบับเต็ม)"):
@@ -750,7 +750,6 @@ def render_analysis_result(analysis: Dict[str, Any]):
     swiss = analysis.get("swiss_cheese", []) or []
     if swiss:
         df_swiss = pd.DataFrame(swiss)
-        # rename for display
         display_cols = {
             "layer": "ชั้นระบบ",
             "type": "ประเภท",
@@ -762,7 +761,6 @@ def render_analysis_result(analysis: Dict[str, Any]):
     else:
         st.write("-")
 
-    # contributing factors
     factors = analysis.get("contributing_factors", []) or []
     if factors:
         st.markdown("### 6) ปัจจัยเอื้อ/ปัจจัยร่วม")
@@ -773,7 +771,6 @@ def render_analysis_result(analysis: Dict[str, Any]):
 def render_plan_result(plan: Dict[str, Any]):
     st.subheader("🎯 แผนปฏิบัติการ / PDSA")
 
-    # PDSA table
     pdsa = plan.get("pdsa", {}) or {}
     pdsa_rows = [
         ["วางแผน (Plan)", "\n".join([f"- {x}" for x in (pdsa.get("plan", []) or [])])],
@@ -788,7 +785,6 @@ def render_plan_result(plan: Dict[str, Any]):
         hide_index=True,
     )
 
-    # Action plan
     st.markdown("### 2) Action Plan")
     ap = plan.get("action_plan", []) or []
     if ap:
@@ -804,7 +800,6 @@ def render_plan_result(plan: Dict[str, Any]):
     else:
         st.write("-")
 
-    # Initiative ideas
     st.markdown("### 3) Initiative Ideas")
     ideas = plan.get("initiative_ideas", {}) or {}
     col1, col2, col3 = st.columns(3)
@@ -821,7 +816,6 @@ def render_plan_result(plan: Dict[str, Any]):
         for x in ideas.get("long_term_3_12_months", []) or []:
             st.markdown(f"- {x}")
 
-    # Conclusion & next 72h
     st.markdown("### 4) Conclusion & Recommendations")
     for i, x in enumerate(plan.get("conclusion_recommendations", []) or [], 1):
         st.markdown(f"{i}. {x}")
@@ -926,7 +920,6 @@ def render_entry_tab():
 
     left, right = st.columns([1.15, 1], gap="large")
 
-    # ใช้อัปโหลดภาพ RCA เป็นตัวแปรเดียว เพื่อใช้ทั้งในฟอร์มและส่งเข้า Gemini ได้
     uploaded_rca_image = None
 
     with left:
@@ -972,8 +965,7 @@ def render_entry_tab():
                 try:
                     record = create_record_from_form(uploaded_rca_image=uploaded_rca_image)
                     append_record_to_sheet(record)
-                    # clear cache so history refreshes
-                    load_sheet_df.clear()
+                    load_sheet_df.clear()  # ให้ tab history refresh
                     st.success("บันทึกข้อมูลสำเร็จ ✅")
                     clear_form_after_save()
                     st.rerun()
@@ -989,7 +981,6 @@ def render_entry_tab():
             "→ ผู้ใช้ตรวจทานผลลัพธ์ แล้วค่อยกด **บันทึกข้อมูล**"
         )
 
-        # ปุ่ม AI
         if st.button("🧠 RCA Assistant", use_container_width=True):
             incident_text = st.session_state.get("form_incident_detail", "").strip()
             if not incident_text:
@@ -1016,7 +1007,6 @@ def render_entry_tab():
                 except Exception as e:
                     st.error(f"RCA Assistant error: {e}")
 
-        # แสดงผล AI ถ้ามี
         analysis = st.session_state.get("rca_analysis_json")
         plan = st.session_state.get("rca_plan_json")
 
@@ -1040,21 +1030,16 @@ def parse_event_datetime_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     out = df.copy()
 
-    # normalize strings
     out["event_date"] = out.get("event_date", "").astype(str).str.strip()
     out["event_time"] = out.get("event_time", "").astype(str).str.strip()
 
-    # parse date safely
     out["_event_date_dt"] = pd.to_datetime(out["event_date"], errors="coerce")
 
-    # parse time (optional)
-    # รวมเป็น datetime สำหรับ sort
     out["_event_datetime"] = pd.to_datetime(
         out["event_date"].astype(str) + " " + out["event_time"].astype(str),
         errors="coerce",
     )
 
-    # สำคัญ: ใช้ .dt.date เพื่อเอาไปเทียบกับ st.date_input (ซึ่งเป็น datetime.date)
     out["_event_date_only"] = out["_event_date_dt"].dt.date
 
     return out
@@ -1075,7 +1060,6 @@ def render_history_tab():
 
     df = parse_event_datetime_columns(df)
 
-    # ========== DATE FIXES ==========
     valid_dates_series = df["_event_date_dt"].dropna()
     if valid_dates_series.empty:
         min_d = date.today()
@@ -1084,11 +1068,9 @@ def render_history_tab():
         min_d = valid_dates_series.min().date()
         max_d = valid_dates_series.max().date()
 
-    # เผื่อ max < min (ข้อมูลพิลึก)
     if max_d < min_d:
         min_d, max_d = max_d, min_d
 
-    # Filters
     st.markdown("### ตัวกรอง")
     c1, c2, c3, c4 = st.columns([1, 1, 1, 1.4])
 
@@ -1113,12 +1095,10 @@ def render_history_tab():
         key="hist_proc",
     )
 
-    # normalize range
     if start_date > end_date:
         st.warning("วันที่เริ่มมากกว่าวันที่สิ้นสุด ระบบจะสลับให้โดยอัตโนมัติ")
         start_date, end_date = end_date, start_date
 
-    # filter (เปรียบเทียบ date กับ date — แก้ dtype error)
     m = pd.Series(True, index=df.index)
 
     m &= df["_event_date_only"].notna()
@@ -1141,13 +1121,11 @@ def render_history_tab():
 
     filtered = df[m].copy()
 
-    # sort by event datetime desc (fallback created_at)
     filtered["_created_at_dt"] = pd.to_datetime(filtered.get("created_at", ""), errors="coerce")
     filtered = filtered.sort_values(by=["_event_datetime", "_created_at_dt"], ascending=False, na_position="last")
 
     st.markdown(f"**ผลลัพธ์ทั้งหมด:** {len(filtered):,} รายการ")
 
-    # summary chips
     if not filtered.empty:
         s1, s2, s3 = st.columns(3)
         with s1:
@@ -1188,7 +1166,6 @@ def render_history_tab():
         }
     )
 
-    # download csv
     csv_bytes = filtered[display_cols].to_csv(index=False).encode("utf-8-sig")
     st.download_button(
         "⬇️ ดาวน์โหลดผลลัพธ์ (CSV)",
@@ -1198,7 +1175,6 @@ def render_history_tab():
         use_container_width=False,
     )
 
-    # detail viewer
     with st.expander("🔍 ดูรายละเอียดรายรายการ (เลือกจากตารางด้านล่างสุด 20 รายการ)"):
         preview = filtered.head(20).copy()
         if preview.empty:
@@ -1244,6 +1220,7 @@ def render_header():
         if st.button("🚪 Logout"):
             st.session_state.authenticated = False
             st.session_state.login_username = ""
+            st.session_state.app_mode = "main"
             st.rerun()
 
 
@@ -1266,6 +1243,11 @@ def main():
         return
 
     check_required_env()
+
+    # โหมดพรีวิวก้างปลาเดี่ยว (เต็มหน้า)
+    if st.session_state.get("app_mode") == "fishbone_preview":
+        render_fishbone_preview_page()
+        return
 
     render_header()
     st.markdown("---")
