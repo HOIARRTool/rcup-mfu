@@ -8,6 +8,7 @@ import html
 from datetime import datetime, date, time
 from typing import Any, Dict, List, Optional, Tuple
 from io import BytesIO
+
 import pandas as pd
 import requests
 import streamlit as st
@@ -652,45 +653,7 @@ def fishbone_svg(effect: str, categories: List[Dict[str, Any]]) -> str:
     return svg
 
 
-def render_analysis_result(analysis: Dict[str, Any]):
-    st.subheader("🔎 ผลวิเคราะห์ RCA")
-
-    # 1) Summary
-    st.markdown("### 1) สรุปเหตุการณ์")
-    st.write(analysis.get("event_summary", "-"))
-
-    # 2) Timeline
-    st.markdown("### 2) ไทม์ไลน์เหตุการณ์")
-    timeline = analysis.get("timeline", []) or []
-    if timeline:
-        for i, item in enumerate(timeline, 1):
-            st.markdown(f"- **{i}.** {item}")
-    else:
-        st.write("-")
-
-    # 3) Fishbone
-    st.markdown("### 3) แผนผังก้างปลา (Ishikawa)")
-    fishbone = analysis.get("fishbone", {}) or {}
-    effect = fishbone.get("effect", "") or analysis.get("event_summary", "เหตุการณ์ / ผลลัพธ์")
-    categories = fishbone.get("categories", []) or []
-
-    svg = fishbone_svg(effect, categories)
-    st.markdown("<div class='fishbone-wrap'>", unsafe_allow_html=True)
-    components.html(svg, height=580, scrolling=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-        # ปุ่มดาวน์โหลดแผนผังก้างปลาเป็น JPG
-    try:
-        jpg_bytes = fishbone_svg_to_jpg_bytes(svg, output_width=2200, jpg_quality=95)
-        st.download_button(
-            "🖼️ ดาวน์โหลดแผนผังก้างปลา (JPG)",
-            data=jpg_bytes,
-            file_name=f"fishbone_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg",
-            mime="image/jpeg",
-            use_container_width=False,
-        )
-    except Exception as e:
-        st.caption(f"ยังไม่สามารถสร้างไฟล์ JPG ได้: {e}")
-    def fishbone_svg_to_jpg_bytes(svg_str: str, output_width: int = 2200, jpg_quality: int = 95) -> bytes:
+def fishbone_svg_to_jpg_bytes(svg_str: str, output_width: int = 2200, jpg_quality: int = 95) -> bytes:
     """
     แปลง SVG (string) -> JPG bytes สำหรับดาวน์โหลดใน Streamlit
     ต้องมีแพ็กเกจ: cairosvg, Pillow
@@ -717,6 +680,47 @@ def render_analysis_result(analysis: Dict[str, Any]):
     img.save(out, format="JPEG", quality=jpg_quality, optimize=True)
     out.seek(0)
     return out.getvalue()
+
+
+def render_analysis_result(analysis: Dict[str, Any]):
+    st.subheader("🔎 ผลวิเคราะห์ RCA")
+
+    # 1) Summary
+    st.markdown("### 1) สรุปเหตุการณ์")
+    st.write(analysis.get("event_summary", "-"))
+
+    # 2) Timeline
+    st.markdown("### 2) ไทม์ไลน์เหตุการณ์")
+    timeline = analysis.get("timeline", []) or []
+    if timeline:
+        for i, item in enumerate(timeline, 1):
+            st.markdown(f"- **{i}.** {item}")
+    else:
+        st.write("-")
+
+    # 3) Fishbone
+    st.markdown("### 3) แผนผังก้างปลา (Ishikawa)")
+    fishbone = analysis.get("fishbone", {}) or {}
+    effect = fishbone.get("effect", "") or analysis.get("event_summary", "เหตุการณ์ / ผลลัพธ์")
+    categories = fishbone.get("categories", []) or []
+
+    svg = fishbone_svg(effect, categories)
+    st.markdown("<div class='fishbone-wrap'>", unsafe_allow_html=True)
+    components.html(svg, height=580, scrolling=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ปุ่มดาวน์โหลดแผนผังก้างปลาเป็น JPG
+    try:
+        jpg_bytes = fishbone_svg_to_jpg_bytes(svg, output_width=2200, jpg_quality=95)
+        st.download_button(
+            "🖼️ ดาวน์โหลดแผนผังก้างปลา (JPG)",
+            data=jpg_bytes,
+            file_name=f"fishbone_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg",
+            mime="image/jpeg",
+            use_container_width=False,
+        )
+    except Exception as e:
+        st.caption(f"ยังไม่สามารถสร้างไฟล์ JPG ได้: {e}")
 
     if categories:
         with st.expander("ดูรายละเอียดสาเหตุทั้งหมด (ฉบับเต็ม)"):
@@ -821,67 +825,6 @@ def render_plan_result(plan: Dict[str, Any]):
     st.markdown("**ก้าวถัดไป (ภายใน 72 ชั่วโมง)**")
     for x in plan.get("next_72_hours", []) or []:
         st.markdown(f"- {x}")
-
-
-def build_prefill_texts_from_ai(analysis: Dict[str, Any], plan: Dict[str, Any]) -> Dict[str, str]:
-    timeline_lines = analysis.get("timeline", []) or []
-    timeline_text = "\n".join([f"{i+1}. {x}" for i, x in enumerate(timeline_lines)])
-
-    # rca_text รวมสาระสำคัญ
-    rca_parts = []
-    if analysis.get("event_summary"):
-        rca_parts.append("สรุปเหตุการณ์:\n" + str(analysis["event_summary"]))
-
-    whys = analysis.get("five_whys", []) or []
-    if whys:
-        rca_parts.append("5 Whys:\n" + "\n".join([f"- {x}" for x in whys]))
-
-    factors = analysis.get("contributing_factors", []) or []
-    if factors:
-        rca_parts.append("Contributing Factors:\n" + "\n".join([f"- {x}" for x in factors]))
-
-    swiss = analysis.get("swiss_cheese", []) or []
-    if swiss:
-        swiss_txt = []
-        for row in swiss:
-            swiss_txt.append(
-                f"- [{row.get('layer','')}] {row.get('hole','')} | ป้องกัน: {row.get('prevention','')}"
-            )
-        rca_parts.append("Swiss Cheese:\n" + "\n".join(swiss_txt))
-
-    rca_text = "\n\n".join(rca_parts)
-
-    # development plan
-    dev_parts = []
-    recs = plan.get("conclusion_recommendations", []) or []
-    if recs:
-        dev_parts.append("ข้อเสนอแนะหลัก:\n" + "\n".join([f"{i+1}. {x}" for i, x in enumerate(recs)]))
-
-    next72 = plan.get("next_72_hours", []) or []
-    if next72:
-        dev_parts.append("ก้าวถัดไปภายใน 72 ชั่วโมง:\n" + "\n".join([f"- {x}" for x in next72]))
-
-    action_plan = plan.get("action_plan", []) or []
-    if action_plan:
-        ap_lines = []
-        for i, row in enumerate(action_plan, 1):
-            ap_lines.append(
-                f"{i}) {row.get('measure','')} | ผู้รับผิดชอบ: {row.get('owner','')} | กำหนดเสร็จ: {row.get('due','')}"
-            )
-        dev_parts.append("Action Plan (สรุป):\n" + "\n".join(ap_lines))
-
-    development_plan_text = "\n\n".join(dev_parts)
-
-    # initial correction (ดึง quick wins เป็นเบื้องต้น)
-    qwin = (((plan.get("initiative_ideas") or {}).get("quick_wins_0_30_days")) or [])
-    initial_correction = "\n".join([f"- {x}" for x in qwin[:5]])
-
-    return {
-        "timeline_text": timeline_text,
-        "rca_text": rca_text,
-        "development_plan": development_plan_text,
-        "initial_correction": initial_correction,
-    }
 
 
 # =========================
@@ -1035,7 +978,7 @@ def render_entry_tab():
 
     with right:
         st.markdown("### 🤖 RCA Assistant")
-        st.caption("ระบบจะวิเคราะห์จากรายละเอียดเหตุการณ์ แล้วแสดงผลให้คัดลอก/กดเติมลงช่องฟอร์มก่อนบันทึก")
+        st.caption("ระบบจะวิเคราะห์จากรายละเอียดเหตุการณ์ แล้วแสดงผลให้ตรวจทาน จากนั้นคัดลอกไปกรอกในฟอร์มเองก่อนบันทึก")
 
         st.info(
             "หลักการใช้งาน: ปุ่ม RCA Assistant จะ **ไม่บันทึกลง Google Sheets** โดยอัตโนมัติ\n"
@@ -1079,21 +1022,6 @@ def render_entry_tab():
         if plan:
             st.markdown("---")
             render_plan_result(plan)
-
-        # ปุ่มเติมค่าลงฟอร์ม
-        if analysis and plan:
-            st.markdown("---")
-            if st.button("⬅️ เติมผลลัพธ์ AI ลงช่องฟอร์ม (ไทม์ไลน์ / RCA / แผนพัฒนา)", use_container_width=True):
-                filled = build_prefill_texts_from_ai(analysis, plan)
-                # เติมเฉพาะถ้ายังว่าง หรือเติมทับ? ที่นี่เลือกเติมทับเพื่อความชัดเจน
-                st.session_state.form_timeline_text = filled.get("timeline_text", "")
-                st.session_state.form_rca_text = filled.get("rca_text", "")
-                st.session_state.form_development_plan = filled.get("development_plan", "")
-                # initial correction ดึงจาก quick wins
-                if not st.session_state.get("form_initial_correction", "").strip():
-                    st.session_state.form_initial_correction = filled.get("initial_correction", "")
-                st.success("เติมข้อมูลจาก AI ลงฟอร์มแล้ว ✨")
-                st.rerun()
 
 
 # =========================
