@@ -674,10 +674,14 @@ def fishbone_svg_to_jpg_bytes(svg_str: str, output_width: int = 2200, jpg_qualit
         output_width=output_width
     )
 
-    # PNG -> JPG (JPEG ไม่มี transparency จึงแปลงเป็น RGB)
-    img = Image.open(BytesIO(png_bytes)).convert("RGB")
+    # เปิดเป็น RGBA เพื่อเก็บ alpha แล้วปูพื้นขาวก่อนแปลงเป็น JPG
+    img_rgba = Image.open(BytesIO(png_bytes)).convert("RGBA")
+
+    white_bg = Image.new("RGB", img_rgba.size, (255, 255, 255))
+    white_bg.paste(img_rgba, mask=img_rgba.split()[-1])  # ใช้ alpha channel เป็น mask
+
     out = BytesIO()
-    img.save(out, format="JPEG", quality=jpg_quality, optimize=True)
+    white_bg.save(out, format="JPEG", quality=jpg_quality, optimize=True)
     out.seek(0)
     return out.getvalue()
 
