@@ -7,7 +7,7 @@ import json
 import html
 from datetime import datetime, date, time
 from typing import Any, Dict, List, Optional, Tuple
-
+from io import BytesIO
 import pandas as pd
 import requests
 import streamlit as st
@@ -462,20 +462,22 @@ def build_plan_prompt(incident_text: str, analysis_json: Dict[str, Any]) -> str:
 
 
 def fishbone_svg(effect: str, categories: List[Dict[str, Any]]) -> str:
-    """สร้าง SVG ก้างปลาแบบง่ายสำหรับแสดงใน Streamlit"""
-    cats = categories[:6] if categories else []
-    if not cats:
-        cats = [{"label": "ยังไม่มีข้อมูล", "items": []}]
-
+    """
+    Executive-friendly fishbone:
+    - เน้นอ่านง่ายสำหรับผู้บริหาร
+    - แสดง 4 หมวดหลัก (บน 2 / ล่าง 2)
+    - แสดงสาเหตุหลักหมวดละ 1-2 ข้อบนภาพ
+    - รายละเอียดเต็มให้ดูใน expander ด้านล่าง
+    """
+    # ===== helper =====
     def esc(s: str) -> str:
         return html.escape(str(s or ""))
 
-    def wrap_text(s: str, n: int = 18, max_lines: int = 3) -> List[str]:
+    def wrap_text(s: str, n: int = 22, max_lines: int = 4) -> List[str]:
         s = str(s or "").strip()
         if not s:
             return []
-        lines = []
-        i = 0
+        lines, i = [], 0
         while i < len(s) and len(lines) < max_lines:
             lines.append(s[i:i+n])
             i += n
@@ -483,92 +485,168 @@ def fishbone_svg(effect: str, categories: List[Dict[str, Any]]) -> str:
             lines[-1] = lines[-1][:-1] + "…"
         return lines
 
-    W, H = 1200, 620
-    spine_y = 310
-    spine_x1 = 120
-    head_x = 905
-    head_y = 240
-    head_w = 260
-    head_h = 140
+    # ===== เตรียมหมวด (คัดให้เหลือ 4 หมวด + top 2 items/หมวด) =====
+    raw = categories or []
+    if not raw:
+        raw = [{"label": "ยังไม่มีข้อมูล", "items": []}]
 
-    x_start, x_end = 320, 860
-    step = (x_end - x_start) / max(1, (len(cats) - 1))
-    top_end_y, bot_end_y = 110, 510
-    end_dx = 170
+    # เอาแค่ 4 หมวดแรก (เวอร์ชันผู้บริหาร)
+    raw = raw[:4]
 
-    ribs_f = [0.35, 0.55, 0.75, 0.9]
+    cats = []
+    for c in raw:
+        items = [str(x) for x in (c.get("items", []) or []) if str(x).strip()]
+        cats.append({
+            "label": str(c.get("label", "")).strip() or "ไม่ระบุ",
+            "items": items[:2],  # แสดงบนภาพแค่ 2 ข้อ
+        })
 
-    bones_svg = []
+    # ถ้าน้อยกว่า 4 หมวด เติมช่องว่างให้ layout คงรูป
+    while len(cats) < 4:
+        cats.append({"label": "", "items": []})
+
+    # ===== canvas =====
+    W, H = 1500, 820
+    spine_y = 410
+    spine_x1 = 140
+
+    head_x = 1090
+    head_y = 305
+    head_w = 350
+    head_h = 210
+
+    # จุดต่อกระดูกกับแกนหลัก (fixed layout 4 ช่อง)
+    anchors = [
+        {"x": 460, "y": 250, "top": True},   # บนซ้าย
+        {"x": 810, "y": 250, "top": True},   # บนขวา
+        {"x": 560, "y": 570, "top": False},  # ล่างซ้าย
+        {"x": 910, "y": 570, "top": False},  # ล่างขวา
+    ]
+
+    # ปลายกระดูกชี้ไปทางซ้าย
+    end_dx = 220
+
+    # ===== layers =====
+    lines_layer = []
+    text_layer = []
+
+    # วาดกระดูกแต่ละหมวด
     for i, c in enumerate(cats):
-        x = x_start + (step * i if len(cats) > 1 else 0)
-        is_top = (i % 2 == 0)
-        end_x = x - end_dx
-        end_y = top_end_y if is_top else bot_end_y
+        if not c["label"]:  # ช่องว่าง (padding)
+            continue
 
+        a = anchors[i]
+        x = a["x"]
+        end_y = a["y"]
+        is_top = a["top"]
+        end_x = x - end_dx
+
+        # กระดูกหลักของหมวด
+        lines_layer.append(
+            f'<line x1="{x}" y1="{spine_y}" x2="{end_x}" y2="{end_y}" stroke="#334155" stroke-width="3"/>'
+        )
+
+        # เวคเตอร์
         dx = end_x - x
         dy = end_y - spine_y
         ln = (dx**2 + dy**2) ** 0.5 or 1
-        ux, uy = dx/ln, dy/ln
+        ux, uy = dx / ln, dy / ln
         px, py = -uy, ux
         if is_top:
             px, py = -px, -py
 
-        label_x = end_x - 8
-        label_y = end_y - 46 if is_top else end_y + 12
-        label_w = 240
-        label_h = 34
+        # ===== กล่องหัวหมวด (วางปลายสุด) =====
+        label_w = 260
+        label_h = 40
+        label_x = end_x - label_w - 10
+        label_y = end_y - 52 if is_top else end_y + 12
 
-        label = esc(c.get("label", ""))
-        items = [str(x) for x in (c.get("items", []) or [])][:4]
+        text_layer.append(
+            f'<rect x="{label_x}" y="{label_y}" width="{label_w}" height="{label_h}" rx="12" '
+            f'fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>'
+            f'<text x="{label_x+14}" y="{label_y+26}" font-size="15" font-weight="700" '
+            f'font-family="Sarabun, Noto Sans Thai, sans-serif" fill="#0f172a">{esc(c["label"])}</text>'
+        )
 
-        ribs_svg = []
-        for j, item in enumerate(items):
-            f = ribs_f[min(j, len(ribs_f)-1)]
+        # ===== ribs (แสดง 1-2 ข้อแบบอ่านง่าย) =====
+        ribs_f = [0.35, 0.58]
+        rib_len = 42
+
+        for j, item in enumerate(c["items"][:2]):
+            f = ribs_f[j]
             sx = x + dx * f
             sy = spine_y + dy * f
-            ex = sx + px * 46
-            ey = sy + py * 46
-            tx = ex + px * 12
-            ty = ey + (-6 if is_top else 14)
-            ribs_svg.append(
-                f'<line x1="{sx}" y1="{sy}" x2="{ex}" y2="{ey}" stroke="#475569" stroke-width="2" />'
-                f'<text x="{tx}" y="{ty}" font-size="12" font-family="sans-serif" fill="#0f172a">{esc(item[:44])}</text>'
+            ex = sx + px * rib_len
+            ey = sy + py * rib_len
+
+            # เส้น rib
+            lines_layer.append(
+                f'<line x1="{sx}" y1="{sy}" x2="{ex}" y2="{ey}" stroke="#64748b" stroke-width="2"/>'
             )
 
-        bones_svg.append(f"""
-            <line x1="{x}" y1="{spine_y}" x2="{end_x}" y2="{end_y}" stroke="#334155" stroke-width="3" />
-            <rect x="{label_x}" y="{label_y}" width="{label_w}" height="{label_h}" rx="10"
-                  fill="#fff" stroke="#94a3b8" stroke-width="2"/>
-            <text x="{label_x + 12}" y="{label_y + 22}" font-size="14" font-weight="700"
-                  font-family="sans-serif" fill="#0f172a">{label}</text>
-            {''.join(ribs_svg)}
-        """)
+            # กล่องข้อความ rib (กันเส้นทับ)
+            tx = ex + px * 8
+            ty = ey + (-8 if is_top else 16)
 
-    effect_lines = wrap_text(effect or "เหตุการณ์ / ผลลัพธ์", 18, 4)
+            # จำกัดความยาวข้อความบนรูป
+            item_short = str(item).strip()
+            if len(item_short) > 38:
+                item_short = item_short[:37] + "…"
+
+            bg_w = min(340, max(170, len(item_short) * 7 + 16))
+            bg_h = 24
+            bg_x = tx - 6
+            bg_y = ty - 17
+
+            text_layer.append(
+                f'<rect x="{bg_x}" y="{bg_y}" width="{bg_w}" height="{bg_h}" rx="8" '
+                f'fill="#ffffff" opacity="0.95"/>'
+                f'<text x="{tx}" y="{ty}" font-size="12" '
+                f'font-family="Sarabun, Noto Sans Thai, sans-serif" fill="#0f172a">{esc(item_short)}</text>'
+            )
+
+    # ===== effect box =====
+    effect_lines = wrap_text(effect or "เหตุการณ์ / ผลลัพธ์", n=20, max_lines=5)
     effect_tspan = "".join(
-        [f'<tspan x="{head_x + head_w/2}" dy="{0 if idx==0 else 18}">{esc(line)}</tspan>' for idx, line in enumerate(effect_lines)]
+        [f'<tspan x="{head_x + head_w/2}" dy="{0 if idx==0 else 20}">{esc(line)}</tspan>'
+         for idx, line in enumerate(effect_lines)]
     )
 
     svg = f"""
-    <svg viewBox="0 0 {W} {H}" width="100%" height="560" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 {W} {H}" width="100%" height="650" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <marker id="arrowHead" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
-          <path d="M0,0 L12,6 L0,12 Z" fill="#0ea5e9"/>
+        <marker id="arrowHead" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto">
+          <path d="M0,0 L14,7 L0,14 Z" fill="#0ea5e9"/>
         </marker>
       </defs>
 
+      <!-- spine -->
       <circle cx="{spine_x1}" cy="{spine_y}" r="10" fill="#0f172a"/>
-      <line x1="{spine_x1}" y1="{spine_y}" x2="{head_x}" y2="{spine_y}" stroke="#0f172a" stroke-width="6" marker-end="url(#arrowHead)"/>
+      <line x1="{spine_x1}" y1="{spine_y}" x2="{head_x}" y2="{spine_y}"
+            stroke="#0f172a" stroke-width="6" marker-end="url(#arrowHead)"/>
 
-      <rect x="{head_x}" y="{head_y}" width="{head_w}" height="{head_h}" rx="16" fill="#fff" stroke="#0f172a" stroke-width="3"/>
-      <text x="{head_x + head_w/2}" y="{head_y + 42}" text-anchor="middle" font-size="14" font-weight="800" font-family="sans-serif" fill="#0f172a">เหตุการณ์ / ผลลัพธ์</text>
-      <text x="{head_x + head_w/2}" y="{head_y + 76}" text-anchor="middle" font-size="14" font-weight="700" font-family="sans-serif" fill="#0f172a">
+      <!-- lines first -->
+      {''.join(lines_layer)}
+
+      <!-- head -->
+      <rect x="{head_x}" y="{head_y}" width="{head_w}" height="{head_h}" rx="18"
+            fill="#ffffff" stroke="#0f172a" stroke-width="3"/>
+      <text x="{head_x + head_w/2}" y="{head_y + 44}" text-anchor="middle"
+            font-size="15" font-weight="800"
+            font-family="Sarabun, Noto Sans Thai, sans-serif" fill="#0f172a">เหตุการณ์ / ผลลัพธ์</text>
+
+      <text x="{head_x + head_w/2}" y="{head_y + 84}" text-anchor="middle"
+            font-size="15" font-weight="700"
+            font-family="Sarabun, Noto Sans Thai, sans-serif" fill="#0f172a">
         {effect_tspan}
       </text>
 
-      {''.join(bones_svg)}
+      <!-- text last -->
+      {''.join(text_layer)}
 
-      <text x="{spine_x1 - 10}" y="{spine_y - 18}" text-anchor="middle" font-size="12" font-weight="700" font-family="sans-serif" fill="#475569">สาเหตุ</text>
+      <text x="{spine_x1 - 8}" y="{spine_y - 20}" text-anchor="middle"
+            font-size="12" font-weight="700"
+            font-family="Sarabun, Noto Sans Thai, sans-serif" fill="#475569">สาเหตุ</text>
     </svg>
     """
     return svg
@@ -600,9 +678,48 @@ def render_analysis_result(analysis: Dict[str, Any]):
     st.markdown("<div class='fishbone-wrap'>", unsafe_allow_html=True)
     components.html(svg, height=580, scrolling=True)
     st.markdown("</div>", unsafe_allow_html=True)
+        # ปุ่มดาวน์โหลดแผนผังก้างปลาเป็น JPG
+    try:
+        jpg_bytes = fishbone_svg_to_jpg_bytes(svg, output_width=2200, jpg_quality=95)
+        st.download_button(
+            "🖼️ ดาวน์โหลดแผนผังก้างปลา (JPG)",
+            data=jpg_bytes,
+            file_name=f"fishbone_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg",
+            mime="image/jpeg",
+            use_container_width=False,
+        )
+    except Exception as e:
+        st.caption(f"ยังไม่สามารถสร้างไฟล์ JPG ได้: {e}")
+    def fishbone_svg_to_jpg_bytes(svg_str: str, output_width: int = 2200, jpg_quality: int = 95) -> bytes:
+    """
+    แปลง SVG (string) -> JPG bytes สำหรับดาวน์โหลดใน Streamlit
+    ต้องมีแพ็กเกจ: cairosvg, Pillow
+    """
+    try:
+        import cairosvg
+    except ImportError:
+        raise RuntimeError("ยังไม่ได้ติดตั้ง cairosvg (เพิ่มใน requirements.txt)")
+
+    try:
+        from PIL import Image
+    except ImportError:
+        raise RuntimeError("ยังไม่ได้ติดตั้ง Pillow (เพิ่มใน requirements.txt)")
+
+    # แปลง SVG -> PNG bytes ก่อน
+    png_bytes = cairosvg.svg2png(
+        bytestring=svg_str.encode("utf-8"),
+        output_width=output_width
+    )
+
+    # PNG -> JPG (JPEG ไม่มี transparency จึงแปลงเป็น RGB)
+    img = Image.open(BytesIO(png_bytes)).convert("RGB")
+    out = BytesIO()
+    img.save(out, format="JPEG", quality=jpg_quality, optimize=True)
+    out.seek(0)
+    return out.getvalue()
 
     if categories:
-        with st.expander("ดูรายการสาเหตุแบบข้อความ"):
+        with st.expander("ดูรายละเอียดสาเหตุทั้งหมด (ฉบับเต็ม)"):
             cols = st.columns(2)
             for idx, c in enumerate(categories):
                 with cols[idx % 2]:
