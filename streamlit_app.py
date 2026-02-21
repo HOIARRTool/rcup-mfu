@@ -54,28 +54,36 @@ st.set_page_config(
 
 
 # =========================
-# HELPER: READ CONFIG
+# HELPER: READ CONFIG (ENV ONLY for Render)
 # =========================
 
-def _get_secret_or_env(key: str, default: Optional[str] = None) -> Optional[str]:
-    """ดึงค่าจาก st.secrets ก่อน ถ้าไม่มีค่อยไป env"""
-    try:
-        if key in st.secrets:
-            return str(st.secrets[key])
-    except Exception:
-        pass
-    return os.getenv(key, default)
+def _get_env(
+    key: str,
+    default: Optional[str] = None,
+    aliases: Optional[List[str]] = None,
+) -> Optional[str]:
+    """ดึงค่าจาก Environment Variables เท่านั้น (ไม่ใช้ st.secrets)"""
+    keys = [key] + (aliases or [])
+    for k in keys:
+        v = os.getenv(k)
+        if v is not None and str(v).strip() != "":
+            return str(v).strip()
+    return default
 
 
 def get_app_config() -> Dict[str, Any]:
-    app_title = _get_secret_or_env("APP_TITLE", "Medication Error Recorder")
-    unit_name = _get_secret_or_env("UNIT_NAME", "unknown-unit")
-    login_user = _get_secret_or_env("APP_LOGIN_USERNAME", "")
-    login_pass = _get_secret_or_env("APP_LOGIN_PASSWORD", "")
-    gsheet_url = _get_secret_or_env("GSHEET_URL", "")
-    worksheet_name = _get_secret_or_env("GSHEET_WORKSHEET", "MedicationError")
-    gcp_sa_json = _get_secret_or_env("GCP_SERVICE_ACCOUNT_JSON", "")
-    gemini_api_key = _get_secret_or_env("GEMINI_API_KEY", "")
+    app_title = _get_env("APP_TITLE", "PHOIR_DEMO")
+    unit_name = _get_env("UNIT_NAME", "unknown-unit")
+    login_user = _get_env("APP_LOGIN_USERNAME", "")
+    login_pass = _get_env("APP_LOGIN_PASSWORD", "")
+
+    # รองรับชื่อที่ถูกต้อง + เผื่อพิมพ์ผิด (GHEET_WORKSHEET)
+    gsheet_url = _get_env("GSHEET_URL", "")
+    worksheet_name = _get_env("GSHEET_WORKSHEET", "PHOIR_DEMO", aliases=["GHEET_WORKSHEET"])
+
+    # รองรับ alias เผื่อใช้ชื่อเก่า
+    gcp_sa_json = _get_env("GCP_SERVICE_ACCOUNT_JSON", "", aliases=["GSHEET_CREDENTIALS_JSON"])
+    gemini_api_key = _get_env("GEMINI_API_KEY", "")
 
     return {
         "APP_TITLE": app_title,
