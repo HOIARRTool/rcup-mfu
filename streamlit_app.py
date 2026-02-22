@@ -128,6 +128,46 @@ st.markdown(
     font-weight: 700;
     margin-bottom: .5rem;
 }
+
+/* login page */
+.hero-box {
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 18px 18px 10px 18px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+.hero-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: .35rem;
+}
+.hero-sub {
+    font-size: .95rem;
+    color: #334155;
+    margin-bottom: .75rem;
+    line-height: 1.5;
+}
+.hero-text {
+    color: #334155;
+    font-size: .92rem;
+    line-height: 1.55;
+}
+.hero-quote {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-left: 4px solid #0ea5e9;
+    background: #f0f9ff;
+    border-radius: 8px;
+    color: #0c4a6e;
+    font-weight: 600;
+    font-size: .92rem;
+}
+.mini-note {
+    color: #475569;
+    font-size: .88rem;
+    line-height: 1.45;
+}
 </style>
     """,
     unsafe_allow_html=True,
@@ -157,32 +197,101 @@ def render_login():
     )
     st.markdown("---")
 
-    c1, c2, c3 = st.columns([1, 1.6, 1])
-    with c2:
-        st.markdown("## 🔐 เข้าสู่ระบบ")
-        st.caption(f"หน่วยงาน: **{CFG['UNIT_NAME']}**")
+    # โลโก้ 2 อันด้านบนตรงกลาง
+    top_l, top_c, top_r = st.columns([1, 2.2, 1])
+    with top_c:
+        lg1, lg2 = st.columns(2)
+        with lg1:
+            st.image(
+                "https://github.com/HOIARRTool/appqtbi/blob/main/messageImage_1763018963411.jpg?raw=1",
+                use_container_width=True,
+            )
+        with lg2:
+            st.image(
+                "https://mfu.ac.th/fileadmin/_processed_/6/7/csm_logo_mfu_3d_colour_15e5a7a50f.png",
+                use_container_width=True,
+            )
 
-        username = st.text_input("ชื่อผู้ใช้", key="login_user_input")
-        password = st.text_input("รหัสผ่าน", type="password", key="login_pass_input")
+    st.markdown("")
 
-        if st.button("เข้าสู่ระบบ", use_container_width=True):
-            expected_user = CFG["APP_LOGIN_USERNAME"]
-            expected_pass = CFG["APP_LOGIN_PASSWORD"]
+    # ซ้าย = เนื้อหา, ขวา = กล่อง login เล็กด้านบน
+    left, right = st.columns([1.8, 1], gap="large")
 
-            # ถ้ายังไม่ได้ตั้งค่า login ใน env ให้ bypass แบบ dev
-            if not expected_user or not expected_pass:
-                st.session_state.authenticated = True
-                st.session_state.login_username = username or "dev-user"
-                st.warning("ยังไม่ได้ตั้งค่า APP_LOGIN_USERNAME / APP_LOGIN_PASSWORD ใน ENV → เข้าแบบ dev mode")
-                st.rerun()
+    with left:
+        st.markdown(
+            """
+<div class="hero-box">
+  <div class="hero-title">Empowering Primary Care: Learn from Every Event, Improve for Every Patient.</div>
+  <div class="hero-sub">(เสริมศักยภาพปฐมภูมิ เรียนรู้ทุกเหตุการณ์ เพื่อมาตรฐานการดูแลผู้ป่วยทุกคน)</div>
 
-            if username == expected_user and password == expected_pass:
-                st.session_state.authenticated = True
-                st.session_state.login_username = username
-                st.success("เข้าสู่ระบบสำเร็จ ✅")
-                st.rerun()
-            else:
-                st.error("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
+  <div class="hero-text">
+    ระบบนี้ถูกออกแบบมาเพื่อยกระดับความปลอดภัยในหน่วยบริการปฐมภูมิ เปลี่ยนทุกการรายงานอุบัติการณ์ให้เป็นข้อมูลเชิงลึก (Insight)
+    เพื่อสนับสนุนให้คนหน้างานบริหารความเสี่ยงและพัฒนาคุณภาพได้ด้วยตนเอง โดยต่อยอดจากบริบทและทรัพยากรที่มีอยู่จริงในพื้นที่
+  </div>
+
+  <br/>
+  <div class="hero-title" style="font-size:0.98rem;">สอดรับกับมาตรฐานสถานพยาบาลปฐมภูมิ (สรพ.)</div>
+  <div class="hero-text">
+    สนับสนุนการขับเคลื่อนคุณภาพตาม ตอนที่ III-(1) การบริหารความเสี่ยงและความปลอดภัย และ ตอนที่ III-(5) ระบบการจัดการด้านยา
+    มีเครื่องมือรองรับการจัดการความคลาดเคลื่อนทางยา (Medication Error) และเหตุการณ์ไม่พึงประสงค์อย่างเป็นระบบ
+  </div>
+
+  <br/>
+  <div class="hero-title" style="font-size:0.98rem;">เปลี่ยนข้อมูล สู่ความปลอดภัยที่ยั่งยืน:</div>
+  <div class="hero-text">
+    📝 <b>บันทึกง่าย ครอบคลุม (Record with Ease)</b>: รายงานความเสี่ยงได้รวดเร็ว ไม่เพิ่มภาระงาน<br/>
+    📊 <b>วิเคราะห์ได้ด้วยตัวเอง (Local Data Analysis)</b>: คืนข้อมูลสู่คนทำงาน เข้าถึง Dashboard เพื่อค้นหาสาเหตุรากเหง้า (Root Cause) ประเมินสถานการณ์ได้ทันที<br/>
+    🔄 <b>พัฒนาอย่างต่อเนื่อง (Continuous Improvement)</b>: ขับเคลื่อนการแก้ปัญหาด้วยข้อมูล (Data-Driven) ป้องกันการเกิดซ้ำอย่างตรงจุด
+  </div>
+
+  <div class="hero-quote">
+    "การรายงานไม่ได้มีไว้เพื่อจับผิด แต่มีไว้เพื่อเรียนรู้"
+  </div>
+  <div class="hero-text" style="margin-top:8px;">
+    ทุกข้อมูลคือโอกาส... มาร่วมสร้าง <b>วัฒนธรรมความปลอดภัย (Safety Culture)</b> ที่แข็งแกร่ง
+    เพื่อยกระดับมาตรฐานการดูแลพี่น้องประชาชนในชุมชนของคุณ
+  </div>
+</div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with right:
+        # กล่อง login ด้านบนขวา (เล็ก)
+        try:
+            login_box = st.container(border=True)
+        except TypeError:
+            login_box = st.container()
+
+        with login_box:
+            st.markdown("### 🔐 เข้าสู่ระบบ")
+            st.caption(f"หน่วยงาน: **{CFG['UNIT_NAME']}**")
+            st.markdown(
+                "<div class='mini-note'>กรุณาเข้าสู่ระบบเพื่อบันทึกและติดตามข้อมูลอุบัติการณ์</div>",
+                unsafe_allow_html=True,
+            )
+
+            username = st.text_input("ชื่อผู้ใช้", key="login_user_input")
+            password = st.text_input("รหัสผ่าน", type="password", key="login_pass_input")
+
+            if st.button("เข้าสู่ระบบ", use_container_width=True, key="btn_login_submit"):
+                expected_user = CFG["APP_LOGIN_USERNAME"]
+                expected_pass = CFG["APP_LOGIN_PASSWORD"]
+
+                # ถ้ายังไม่ได้ตั้งค่า login ใน env ให้ bypass แบบ dev
+                if not expected_user or not expected_pass:
+                    st.session_state.authenticated = True
+                    st.session_state.login_username = username or "dev-user"
+                    st.warning("ยังไม่ได้ตั้งค่า APP_LOGIN_USERNAME / APP_LOGIN_PASSWORD ใน ENV → เข้าแบบ dev mode")
+                    st.rerun()
+
+                if username == expected_user and password == expected_pass:
+                    st.session_state.authenticated = True
+                    st.session_state.login_username = username
+                    st.success("เข้าสู่ระบบสำเร็จ ✅")
+                    st.rerun()
+                else:
+                    st.error("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
 
 
 # =========================
@@ -578,10 +687,11 @@ def call_gemini_json(
             import base64
             img_bytes = image_file.getvalue()
             mime_type = getattr(image_file, "type", None) or "image/png"
+            # ✅ ใช้ inlineData (camelCase) สำหรับ Gemini REST
             parts.append(
                 {
-                    "inline_data": {
-                        "mime_type": mime_type,
+                    "inlineData": {
+                        "mimeType": mime_type,
                         "data": base64.b64encode(img_bytes).decode("utf-8"),
                     }
                 }
@@ -602,6 +712,7 @@ def call_gemini_json(
     }
 
     resp = requests.post(url, json=payload, timeout=timeout_sec)
+
     try:
         data = resp.json()
     except Exception:
@@ -611,24 +722,41 @@ def call_gemini_json(
         err_msg = data.get("error", {}).get("message", f"Gemini API error ({resp.status_code})")
         raise RuntimeError(err_msg)
 
-    text = (
-        data.get("candidates", [{}])[0]
-        .get("content", {})
-        .get("parts", [{}])[0]
-        .get("text", "")
-    )
+    # ดึงข้อความจาก parts แบบ robust (บางครั้งมีหลาย part / candidates ว่าง)
+    candidates = data.get("candidates") or []
+    if not candidates:
+        prompt_feedback = data.get("promptFeedback") or {}
+        block_reason = prompt_feedback.get("blockReason") or "ไม่ทราบสาเหตุ"
+        raise RuntimeError(f"Gemini ไม่ส่ง candidates กลับมา (blockReason={block_reason})")
+
+    first_candidate = candidates[0] or {}
+    content = first_candidate.get("content") or {}
+    content_parts = content.get("parts") or []
+
+    text_chunks: List[str] = []
+    for p in content_parts:
+        if isinstance(p, dict) and p.get("text"):
+            text_chunks.append(str(p.get("text")))
+
+    text = "\n".join(text_chunks).strip()
 
     if not text:
-        raise RuntimeError("Gemini ไม่ส่งผลลัพธ์กลับมา")
+        finish_reason = first_candidate.get("finishReason", "")
+        raise RuntimeError(f"Gemini ไม่ส่งข้อความผลลัพธ์กลับมา (finishReason={finish_reason})")
 
     # clean code fences if any
     cleaned = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.I)
     cleaned = re.sub(r"\s*```$", "", cleaned.strip())
 
     try:
-        return json.loads(cleaned)
+        parsed = json.loads(cleaned)
     except json.JSONDecodeError as e:
         raise RuntimeError(f"Gemini ส่ง JSON ไม่ถูกต้อง: {e}\n\nRaw response:\n{cleaned[:2000]}")
+
+    if not isinstance(parsed, dict):
+        raise RuntimeError("Gemini ส่งผลลัพธ์ JSON ที่ไม่ใช่ object")
+
+    return parsed
 
 
 def build_analysis_prompt(incident_text: str) -> str:
@@ -746,6 +874,7 @@ def build_plan_prompt(incident_text: str, analysis_json: Dict[str, Any]) -> str:
 # =========================
 # FISHBONE SVG (EXECUTIVE-FRIENDLY)
 # =========================
+# หมายเหตุ: เก็บฟังก์ชันไว้ได้ แต่หน้าเว็บจะไม่แสดงรูปก้างปลาแล้ว (แสดงเฉพาะรายละเอียดข้อความ)
 
 def _wrap_by_chars(text: str, max_chars: int = 24, max_lines: int = 3) -> List[str]:
     s = str(text or "").strip()
@@ -1020,6 +1149,7 @@ def render_analysis_result(analysis: Dict[str, Any]):
                 st.markdown("- ไม่มีรายละเอียด")
     else:
         st.write("-")
+
     # 4) 5 Whys
     st.markdown("### 4) วิเคราะห์ทำไม-ทำไม (5 Whys)")
     whys = analysis.get("five_whys", []) or []
@@ -1048,10 +1178,12 @@ def render_analysis_result(analysis: Dict[str, Any]):
 
     # 6) contributing factors
     factors = analysis.get("contributing_factors", []) or []
+    st.markdown("### 6) ปัจจัยเอื้อ/ปัจจัยร่วม")
     if factors:
-        st.markdown("### 6) ปัจจัยเอื้อ/ปัจจัยร่วม")
         for f in factors:
             st.markdown(f"- {f}")
+    else:
+        st.write("-")
 
 
 def render_plan_result(plan: Dict[str, Any]):
@@ -1343,11 +1475,13 @@ def render_entry_tab():
         )
 
         # ปุ่ม AI
-        if st.button("🧸 RCA Assistant", use_container_width=True):
+        if st.button("🧸 RCA Assistant", use_container_width=True, key="btn_rca_assistant"):
             incident_text = st.session_state.get("form_incident_detail", "").strip()
             if not incident_text:
                 st.warning("กรุณากรอกรายละเอียดเหตุการณ์ก่อน")
             else:
+                # ✅ แยก analysis กับ plan ออกจากกัน
+                # ถ้า plan พัง ก็ยังแสดง analysis ได้
                 try:
                     with st.spinner("กำลังวิเคราะห์ RCA..."):
                         analysis = call_gemini_json(
@@ -1356,16 +1490,25 @@ def render_entry_tab():
                             image_file=uploaded_rca_image,
                             timeout_sec=90,
                         )
-                        plan = call_gemini_json(
-                            prompt=build_plan_prompt(incident_text, analysis),
-                            api_key=CFG["GEMINI_API_KEY"],
-                            timeout_sec=90,
-                        )
 
+                        # บันทึก analysis ทันที
                         st.session_state.rca_analysis_json = analysis
-                        st.session_state.rca_plan_json = plan
+                        st.session_state.rca_plan_json = None
 
-                    st.success("วิเคราะห์เสร็จแล้ว ✅")
+                    # ลองสร้างแผนต่อ (ถ้าพังยังไม่ล้าง analysis)
+                    try:
+                        with st.spinner("กำลังสร้างแผนปฏิบัติการ / PDSA..."):
+                            plan = call_gemini_json(
+                                prompt=build_plan_prompt(incident_text, analysis),
+                                api_key=CFG["GEMINI_API_KEY"],
+                                timeout_sec=90,
+                            )
+                            st.session_state.rca_plan_json = plan
+
+                        st.success("วิเคราะห์และสร้างแผนเสร็จแล้ว ✅")
+                    except Exception as e_plan:
+                        st.warning(f"วิเคราะห์ RCA สำเร็จแล้ว แต่สร้างแผน PDSA ไม่สำเร็จ: {e_plan}")
+
                 except Exception as e:
                     st.error(f"RCA Assistant error: {e}")
 
