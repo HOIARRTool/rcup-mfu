@@ -1260,7 +1260,7 @@ def clear_form_after_save():
 def render_entry_tab():
     init_form_state_defaults()
 
-    st.markdown("## 📝 บันทึกข้อมูล Medication Error")
+    st.markdown("## 📝 บันทึกข้อมูล")
 
     left, right = st.columns([1.15, 1], gap="large")
 
@@ -1327,24 +1327,12 @@ def render_entry_tab():
                     st.error(e)
             else:
                 try:
-                    # สร้าง record_id ก่อน เพื่อใช้ตั้งชื่อไฟล์บน Drive ให้ตรงกับ record
-                    temp_record_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
-                    drive_url = ""
-
-                    if uploaded_rca_image is not None:
-                        with st.spinner("กำลังอัปโหลดภาพ RCA ไป Google Drive..."):
-                            drive_info = upload_rca_image_to_drive(uploaded_rca_image, temp_record_id)
-                            drive_url = drive_info.get("file_url", "")
-
-                    record = create_record_from_form(
-                        uploaded_rca_image=uploaded_rca_image,
-                        rca_image_drive_url=drive_url,
-                    )
-                    record["record_id"] = temp_record_id
-
+                    record = create_record_from_form(uploaded_rca_image=uploaded_rca_image)
                     append_record_to_sheet(record)
-                    load_sheet_df.clear()  # refresh history cache
-
+        
+                    # ❌ ลบบรรทัดนี้ออก
+                    # load_sheet_df.clear()
+        
                     st.success("บันทึกข้อมูลสำเร็จ ✅")
                     clear_form_after_save()
                     st.rerun()
