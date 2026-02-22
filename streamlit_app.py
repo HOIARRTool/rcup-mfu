@@ -299,6 +299,7 @@ def append_record_to_sheet(record: Dict[str, Any]) -> None:
     ws.append_row(row, value_input_option="USER_ENTERED")
 
 
+@st.cache_data(show_spinner=False, ttl=30)
 def load_sheet_df() -> pd.DataFrame:
     ws = get_worksheet()
     records = ws.get_all_records(expected_headers=SHEET_COLUMNS)
@@ -1262,8 +1263,9 @@ def apply_pending_form_reset():
         st.session_state["form_event_time"] = datetime.now().time().replace(second=0, microsecond=0)
         st.session_state["rca_analysis_json"] = None
         st.session_state["rca_plan_json"] = None
+        st.session_state["show_fishbone_preview"] = False
 
-        # ถ้าต้องการเคลียร์ file_uploader ด้วย
+        # เคลียร์ file_uploader
         st.session_state.pop("form_rca_image", None)
 
         st.session_state["_reset_form_after_save"] = False
@@ -1343,23 +1345,36 @@ def render_entry_tab():
                     st.error(e)
             else:
                 try:
+                    # 1) สร้าง record จากฟอร์มก่อน เพื่อได้ record_id
                     record = create_record_from_form(uploaded_rca_image=uploaded_rca_image)
+
+                    # 2) ถ้ามีภาพ → อัปโหลดขึ้น Google Drive แล้วใส่ชื่อไฟล์/ลิงก์กลับเข้า record
+                    if uploaded_rca_image is not None:
+                        drive_meta = upload_rca_image_to_drive(
+                            uploaded_rca_image,
+                            record_id=record["record_id"],
+                        )
+                        record["rca_image_filename"] = drive_meta.get("file_name", "") or getattr(uploaded_rca_image, "name", "")
+                        record["rca_image_drive_url"] = drive_meta.get("file_url", "") or ""
+
+                    # 3) บันทึกลง Google Sheets
                     append_record_to_sheet(record)
-                    
-                    # ถ้า load_sheet_df เป็น @st.cache_data ค่อยใช้ .clear()
-                    # ถ้าไม่ได้ cache ให้ลบบรรทัดนี้ทิ้งได้เลย
+
+                    # 4) refresh cache ประวัติ (ถ้าใช้ cache_data)
                     try:
                         load_sheet_df.clear()
                     except Exception:
                         pass
-                    
+
+                    # 5) ขอ reset ฟอร์มใน run ถัดไป แล้ว rerun
                     request_form_reset_after_save()
                     st.rerun()
+
                 except Exception as e:
                     st.exception(e)
 
     with right:
-        st.markdown("### 🐻 RCA Assistant")
+        st.markdown("### 🧸 RCA Assistant")
         st.caption("ระบบจะวิเคราะห์จากรายละเอียดเหตุการณ์ แล้วแสดงผลให้ตรวจทาน จากนั้นคัดลอกไปกรอกในฟอร์มเองก่อนบันทึก")
 
         st.info(
