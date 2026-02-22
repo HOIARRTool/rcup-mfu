@@ -5,3 +5,6 @@ gspread==6.1.4
 google-auth==2.38.0
 cairosvg
 Pillow
+python-docx
+google-api-python-client
+google-auth
