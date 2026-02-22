@@ -12,7 +12,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 import requests
 import streamlit as st
-import streamlit.components.v1 as components
 import gspread
 
 from docx import Document
@@ -26,44 +25,51 @@ from googleapiclient.http import MediaIoBaseUpload
 # CONFIG / CONSTANTS
 # =========================
 
+LOGO_HA_URL = "https://raw.githubusercontent.com/HOIARRTool/appqtbi/main/messageImage_1763018963411.jpg"
+LOGO_MFU_URL = "https://mfu.ac.th/fileadmin/_processed_/6/7/csm_logo_mfu_3d_colour_15e5a7a50f.png"
+
+UNIT_OPTIONS = [
+    "รพ.สต.รพ.ศูนย์การแพทย์มหาวิทยาลัยแม่ฟ้าหลวง",
+    "รพ.สต.แม่ข้าวต้ม",
+    "รพ.สต.โล๊ะป่าห้า",
+    "รพ.สต.ท่าสุด",
+    "รพ.สต.นางแล",
+]
+
+# โครงสร้างชีต (เพิ่มคอลัมน์ใหม่ โดยยังคงของเดิมไว้เพื่อไม่กระทบข้อมูลเก่า)
 SHEET_COLUMNS = [
     "record_id",
-    "unit_name",
+    "unit_name",                  # หน่วยที่เลือกจากฟอร์ม
     "app_title",
-    "event_date",                # YYYY-MM-DD
-    "event_time",                # HH:MM
+    "event_date",                 # YYYY-MM-DD
+    "event_time",                 # HH:MM
 
-    # NEW (for category + sub-process)
-    "event_group",               # 4 กลุ่มหลัก
-    "event_code",                # รหัส (เช่น CPM201)
-    "event_label",               # คำอธิบาย
+    # เดิม (คงไว้เพื่อ compatibility)
+    "process_step",
+    "drug_name",                  # ใช้ค่าว่าง (เอาช่องชื่อยาออกจากฟอร์มแล้ว)
 
-    # legacy field (kept for backward compatibility)
-    "process_step",              # เก็บรหัส event_code เพื่อไม่พังระบบเดิม
-    "drug_name",                 # (จะไม่ใช้แล้ว แต่คงไว้เพื่อความเข้ากันได้)
+    # ใหม่
+    "incident_group",
+    "incident_code",
+    "incident_code_label",
+    "incident_code_other",
+    "severity_scheme",            # A-I หรือ 1-5
+    "severity_level",             # A-I / 1-5
+    "severity_description",
 
-    "severity_level",            # A-I หรือ 1-5
+    # เดิมต่อ
     "incident_detail",
     "timeline_text",
     "initial_correction",
     "rca_text",
-    "rca_image_filename",        # ชื่อไฟล์ภาพ
-    "rca_image_drive_url",       # ลิงก์ไฟล์ภาพบน Google Drive
+    "rca_image_filename",
+    "rca_image_drive_url",
     "development_plan",
     "created_at",
     "created_by",
 ]
 
-# กลุ่มเหตุการณ์หลัก
-EVENT_GROUPS = [
-    "ความคลาดเคลื่อนทางยาและอาการไม่พึงประสงค์",
-    "Patient Safety",
-    "Personal Safety",
-    "People Safety",
-]
-
-# กระบวนการย่อยตามที่ผู้ใช้ให้มา
-EVENT_CATEGORIES: Dict[str, List[Tuple[str, str]]] = {
+INCIDENT_CATALOG: Dict[str, List[Tuple[str, str]]] = {
     "ความคลาดเคลื่อนทางยาและอาการไม่พึงประสงค์": [
         ("CPM201", "Medication error : Prescribing (เกิดข้อผิดพลาด/อุบัติการณ์ในขั้นตอนการสั่งใช้ยา)"),
         ("CPM202", "Medication error : Transcribing (เกิดข้อผิดพลาด/อุบัติการณ์ในขั้นตอนการคัดลอกยา)"),
@@ -133,37 +139,26 @@ EVENT_CATEGORIES: Dict[str, List[Tuple[str, str]]] = {
         ("GOS202", "ห้องน้ำหรือห้องสุขาไม่พร้อมใช้ (เช่น ชำรุด/กดชักโครกไม่ลง/ส้วมเต็ม/ไม่พอใช้) หรือไม่สะดวกต่อผู้พิการ"),
     ],
 }
+GROUP_OPTIONS = list(INCIDENT_CATALOG.keys())
 
-# lookup maps
-EVENT_CODE_TO_LABEL: Dict[str, str] = {}
-EVENT_CODE_TO_GROUP: Dict[str, str] = {}
-for g, items in EVENT_CATEGORIES.items():
-    for code, label in items:
-        EVENT_CODE_TO_LABEL[code] = label
-        EVENT_CODE_TO_GROUP[code] = g
-
-# Severity: People Safety (1-5) + descriptions
-PEOPLE_SEVERITY_OPTIONS = ["1", "2", "3", "4", "5"]
-PEOPLE_SEVERITY_DESC = {
-    "1": "เกิดความผิดพลาดขึ้นแต่ไม่มีผลกระทบต่อผลสำเร็จ/วัตถุประสงค์ (สำเร็จ >90%) หรือช้าไม่เกิน 1.5 เดือน หรือผลกระทบการเงิน < 10,000 บาท",
-    "2": "มีผลกระทบที่ควบคุมได้ (สำเร็จ 81–90%) หรือช้า >1.5–3 เดือน หรือผลกระทบการเงิน 10,001–100,000 บาท",
-    "3": "มีผลกระทบที่ต้องแก้ไข (สำเร็จ 71–80%) หรือช้า >3–4.5 เดือน หรือผลกระทบการเงิน 100,001–500,000 บาท",
-    "4": "ไม่บรรลุเป้าหมายบางส่วน (สำเร็จ 60–70%) หรือช้า >4.5–6 เดือน หรือผลกระทบการเงิน 500,001–10,000,000 บาท",
-    "5": "ไม่บรรลุเป้าหมายรุนแรง (สำเร็จ <60%) หรือภารกิจเสียหายร้ายแรง หรือช้า >6 เดือน หรือผลกระทบการเงิน > 10,000,000 บาท",
+SEVERITY_A_TO_I: Dict[str, str] = {
+    "A": "(เกิดที่นี่) มีโอกาสเกิดเหตุการณ์และค้นพบได้ด้วยตัวเอง สามารถปรับแก้ไขได้ ไม่ส่งผลกระทบถึงผู้อื่นและผู้ป่วยหรือบุคลากร ไม่เกิดความรุนแรง (No Harm)",
+    "B": "(เกิดที่ไกล) เกิดเหตุการณ์/ความผิดพลาดขึ้นแล้วโดยส่งต่อเหตุการณ์/ความผิดพลาดนั้นไปที่ผู้อื่นแต่สามารถตรวจพบและแก้ไขได้ โดยยังไม่มีผลกระทบใดๆ ถึงผู้ป่วยหรือบุคลากร ไม่เกิดความรุนแรง (No Harm)",
+    "C": "(เกิดกับใคร) เกิดเหตุการณ์/ความผิดพลาดขึ้นและมีผลกระทบถึงผู้ป่วยหรือบุคลากร แต่ไม่เกิดอันตรายหรือเสียหาย เกิดความรุนแรงน้อย (Low Harm)",
+    "D": "(ให้ระวัง) เกิดความผิดพลาดขึ้น มีผลกระทบถึงผู้ป่วยหรือบุคลากร ต้องให้การดูแลเฝ้าระวังเป็นพิเศษว่าจะไม่เป็นอันตราย เกิดความรุนแรงน้อย (Low Harm)",
+    "E": "(ต้องรักษา) เกิดความผิดพลาดขึ้น มีผลกระทบถึงผู้ป่วยหรือบุคลากร เกิดอันตรายชั่วคราวที่ต้องแก้ไข/รักษาเพิ่มมากขึ้น เกิดความรุนแรงปานกลาง (Moderate Harm)",
+    "F": "(เยียวยานาน) เกิดความผิดพลาดขึ้น มีผลกระทบที่ต้องใช้เวลาแก้ไขนานกว่าปกติหรือเกินกำหนด ผู้ป่วยหรือบุคลากร ต้องรักษา/นอนโรงพยาบาลนานขึ้น เกิดความรุนแรงปานกลาง (Moderate Harm)",
+    "G": "(ต้องพิการ) เกิดความผิดพลาดถึงผู้ป่วยหรือบุคลากร ทำให้เกิดความพิการถาวร หรือมีผลกระทบทำให้เสียชื่อเสียง/ความเชื่อถือและ/หรือมีการร้องเรียน เกิดความรุนแรงมาก (Severe Harm)",
+    "H": "(ต้องการปั๊ม) เกิดความผิดพลาด ถึงผู้ป่วยหรือบุคลากร มีผลทำให้ต้องทำการช่วยชีวิต ต้องดูแลต่อเนื่องตลอดชีวิต ช่วยเหลือตัวเองไม่ได้ หรือกรณีทำให้เสียชื่อเสียงและ/หรือมีการเรียกร้องค่าเสียหายจากโรงพยาบาล เกิดความรุนแรงมาก (Severe Harm)",
+    "I": "(จำใจลา) เกิดความผิดพลาด ถึงผู้ป่วยหรือบุคลากร เป็นสาเหตุทำให้เสียชีวิต เสียชื่อเสียงโดยมีการฟ้องร้องทางศาล/สื่อ เสียชีวิต (Death)",
 }
 
-# Severity: Clinical/others A-I + descriptions
-SEVERITY_OPTIONS = list("ABCDEFGHI")
-SEVERITY_DESC = {
-    "A": "(เกิดที่นี่) มีโอกาสเกิดเหตุการณ์และค้นพบได้ด้วยตัวเอง ปรับแก้ไขได้ ไม่กระทบผู้อื่น/ผู้ป่วย/บุคลากร (No Harm)",
-    "B": "(เกิดที่ไกล) ส่งต่อให้ผู้อื่นแต่ตรวจพบและแก้ไขได้ ยังไม่มีผลกระทบ (No Harm)",
-    "C": "(เกิดกับใคร) มีผลกระทบถึงผู้ป่วย/บุคลากร แต่ไม่เกิดอันตราย (Low Harm)",
-    "D": "(ให้ระวัง) ต้องเฝ้าระวังเป็นพิเศษว่าจะไม่เป็นอันตราย (Low Harm)",
-    "E": "(ต้องรักษา) อันตรายชั่วคราว ต้องแก้ไข/รักษาเพิ่ม (Moderate Harm)",
-    "F": "(เยียวยานาน) ต้องใช้เวลาแก้ไขนาน/นอน รพ. นานขึ้น (Moderate Harm)",
-    "G": "(ต้องพิการ) พิการถาวร หรือกระทบชื่อเสียง/ร้องเรียน (Severe Harm)",
-    "H": "(ต้องการปั๊ม) ต้องช่วยชีวิต/ดูแลต่อเนื่องตลอดชีวิต หรือเรียกร้องค่าเสียหาย (Severe Harm)",
-    "I": "(จำใจลา) เสียชีวิต หรือเสียชื่อเสียงฟ้องร้อง/สื่อ (Death)",
+SEVERITY_1_TO_5: Dict[str, str] = {
+    "1": "เกิดความผิดพลาดขึ้นแต่ไม่มีผลกระทบต่อผลสำเร็จหรือวัตถุประสงค์ของการดำเนินงาน (ดำเนินงานสำเร็จตามแผนได้มากกว่า 90%) หรือ ทำให้เกิดความล่าช้าของโครงการ ไม่เกิน 1.5 เดือน หรือ ผลกระทบด้านการเงินมีมูลค่าน้อยกว่า 10,000 บาท",
+    "2": "เกิดความผิดพลาดขึ้นแล้ว โดยมีผลกระทบ (ที่ควบคุมได้) ต่อผลสำเร็จหรือวัตถุประสงค์ของการดำเนินงาน (ดำเนินงานสำเร็จตามแผนได้ 81 - 90%) หรือ ทำให้เกิดความล่าช้าของโครงการ มากกว่า 1.5 - 3 เดือน หรือ ผลกระทบด้านการเงินมีมูลค่า 10,001 – 100,000 บาท",
+    "3": "เกิดความผิดพลาดขึ้นแล้ว และมีผลกระทบ (ที่ต้องทำการแก้ไข) ต่อผลสำเร็จหรือวัตถุประสงค์ของการดำเนินงาน (ดำเนินงานสำเร็จตามแผนได้ 71 - 80%) หรือ ทำให้เกิดความล่าช้าของโครงการ มากกว่า 3 – 4.5 เดือน หรือ ผลกระทบด้านการเงินมีมูลค่า 100,001 – 500,000 บาท",
+    "4": "เกิดความผิดพลาดขึ้นแล้ว และทำให้การดำเนินงานไม่บรรลุผลสำเร็จตามเป้าหมาย (ดำเนินงานสำเร็จตามแผนได้ 60 - 70%) หรือ ทำให้เกิดความล่าช้าของโครงการ มากกว่า 4.5 - 6 เดือน หรือ ผลกระทบด้านการเงินมีมูลค่า 500,001 – 10,000,000 บาท",
+    "5": "เกิดความผิดพลาดขึ้นแล้ว และมีผลให้การดำเนินงานไม่บรรลุผลสำเร็จตามเป้าหมาย (ดำเนินงานสำเร็จตามแผนได้น้อยกว่า 60%) ทำให้ภารกิจขององค์กรเสียหายอย่างร้ายแรง หรือ ทำให้เกิดความล่าช้าของโครงการ มากกว่า 6 เดือน หรือ ผลกระทบด้านการเงินมีมูลค่ามากกว่า 10,000,000 บาท",
 }
 
 
@@ -226,38 +221,275 @@ CFG = get_app_config()
 
 
 # =========================
+# HELPER: INCIDENT / SEVERITY
+# =========================
+
+def get_severity_scheme_for_group(group_name: str) -> str:
+    return "1-5" if group_name == "People Safety" else "A-I"
+
+
+def get_severity_dict_for_group(group_name: str) -> Dict[str, str]:
+    return SEVERITY_1_TO_5 if get_severity_scheme_for_group(group_name) == "1-5" else SEVERITY_A_TO_I
+
+
+def severity_format(group_name: str, code: str) -> str:
+    desc = get_severity_dict_for_group(group_name).get(str(code), "")
+    short = desc.split(" หรือ ")[0] if desc else ""
+    if len(short) > 75:
+        short = short[:75] + "..."
+    return f"{code} — {short}" if short else str(code)
+
+
+def get_group_code_items(group_name: str) -> List[Dict[str, str]]:
+    base = [{"code": c, "label": t} for c, t in INCIDENT_CATALOG.get(group_name, [])]
+    base.append({"code": "OTHER", "label": "อื่น ๆ (ระบุเอง)"})
+    return base
+
+
+def get_selected_event_code_payload() -> Dict[str, str]:
+    group_name = st.session_state.get("form_incident_group", GROUP_OPTIONS[0])
+    items = get_group_code_items(group_name)
+    display_map = {f"{it['code']} — {it['label']}": it for it in items}
+
+    choice_display = st.session_state.get("form_incident_code_choice_display", "")
+    chosen = display_map.get(choice_display)
+
+    if not chosen and items:
+        chosen = items[0]
+
+    if not chosen:
+        return {"code": "", "label": "", "other": ""}
+
+    if chosen["code"] == "OTHER":
+        custom_code = str(st.session_state.get("form_incident_code_other_code", "")).strip()
+        custom_label = str(st.session_state.get("form_incident_code_other_label", "")).strip()
+        merged_label = custom_label or "อื่น ๆ"
+        return {
+            "code": custom_code or "OTHER",
+            "label": merged_label,
+            "other": f"{custom_code} | {custom_label}".strip(" |"),
+        }
+
+    return {"code": chosen["code"], "label": chosen["label"], "other": ""}
+
+
+def format_incident_choice_for_history(row: pd.Series) -> str:
+    code = str(row.get("incident_code", "") or "").strip()
+    label = str(row.get("incident_code_label", "") or "").strip()
+    if code and label:
+        return f"{code} — {label}"
+    if code:
+        return code
+    return label or "-"
+
+
+# =========================
 # STYLING
 # =========================
 
 st.markdown(
     """
 <style>
-.block-container { padding-top: 1.2rem; }
+.block-container {
+    padding-top: 0.9rem;
+    padding-bottom: 1.2rem;
+    max-width: 1320px;
+}
 .small-muted { color: #6b7280; font-size: 0.88rem; }
+
 .card {
     border: 1px solid #e5e7eb;
     border-radius: 14px;
     padding: 14px;
     background: #ffffff;
 }
+
 .section-title {
     font-size: 1.05rem;
     font-weight: 700;
     margin-bottom: .5rem;
 }
 
-/* entry pills */
-.pill-wrap { margin-top: .25rem; margin-bottom: .5rem; }
-.pill-hint { color: #6b7280; font-size: .9rem; margin-bottom: .4rem; }
+/* -------- Login Page -------- */
+.login-shell {
+    background:
+      radial-gradient(circle at 12% 18%, rgba(59,130,246,0.15), transparent 34%),
+      radial-gradient(circle at 90% 12%, rgba(34,197,94,0.12), transparent 32%),
+      linear-gradient(135deg, #f8fafc 0%, #eef2ff 45%, #f0fdf4 100%);
+    border: 1px solid #dbeafe;
+    border-radius: 22px;
+    padding: 18px 18px 14px 18px;
+    box-shadow: 0 16px 40px rgba(15,23,42,0.08);
+    margin-bottom: 12px;
+}
 
-/* severity info */
-.sev-box {
-  border: 1px dashed #cbd5e1;
-  background: #f8fafc;
-  border-radius: 12px;
-  padding: 10px 12px;
-  font-size: .95rem;
-  color: #0f172a;
+.login-hero {
+    background: rgba(255,255,255,0.72);
+    border: 1px solid rgba(148,163,184,0.25);
+    border-radius: 18px;
+    padding: 16px 16px 10px 16px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 8px 24px rgba(15,23,42,0.05);
+    margin-bottom: 10px;
+}
+
+.logo-row {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 24px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+.logo-left-wrap, .logo-right-wrap {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+.logo-left-wrap img {
+    height: 96px !important;     /* ดูให้ visual weight สมดุลกับตรา MFU */
+    width: auto !important;
+    object-fit: contain;
+}
+.logo-right-wrap img {
+    height: 96px !important;
+    width: auto !important;
+    object-fit: contain;
+}
+.login-title-center {
+    text-align: center;
+    margin-top: 4px;
+}
+.login-title-center h1 {
+    margin: 0;
+    font-size: 2.05rem;
+    line-height: 1.15;
+    color: #1f2937;
+    letter-spacing: 0.2px;
+    font-weight: 800;
+}
+.login-title-center .subtitle {
+    margin-top: 4px;
+    color: #475569;
+    font-size: 1.02rem;
+    font-weight: 500;
+}
+
+.login-card-box {
+    background: rgba(255,255,255,0.88);
+    border: 1px solid rgba(148,163,184,0.28);
+    border-radius: 16px;
+    padding: 10px 12px 12px 12px;
+    box-shadow: 0 8px 20px rgba(15,23,42,0.05);
+}
+.login-card-box h3 {
+    margin: 0 0 4px 0;
+    font-size: 1.05rem;
+}
+.login-card-box p {
+    margin: 0 0 8px 0;
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+.login-info-box {
+    background: rgba(255,255,255,0.82);
+    border: 1px solid rgba(148,163,184,0.25);
+    border-radius: 16px;
+    padding: 12px 14px;
+    box-shadow: 0 8px 20px rgba(15,23,42,0.04);
+}
+
+.login-badge {
+    display: inline-block;
+    background: #eef2ff;
+    color: #4338ca;
+    border: 1px solid #c7d2fe;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.login-paragraph {
+    color: #334155;
+    font-size: 0.95rem;
+    line-height: 1.55;
+    margin-bottom: 0.55rem;
+}
+
+.feature-list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 6px;
+    margin-bottom: 10px;
+}
+.feature-item {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #6366f1;
+    border-radius: 10px;
+    padding: 8px 10px;
+}
+.feature-title {
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 2px;
+    font-size: 0.94rem;
+}
+.feature-desc {
+    color: #475569;
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+.quote-box {
+    background: #f8fbff;
+    border: 1px dashed #93c5fd;
+    color: #1e3a8a;
+    border-radius: 12px;
+    padding: 9px 10px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+/* Compact widgets in login */
+.login-widget-area .stTextInput > div > div > input {
+    min-height: 2.35rem;
+}
+.login-widget-area .stButton button {
+    min-height: 2.35rem;
+    font-weight: 700;
+    border-radius: 10px;
+}
+
+/* Group button style helper */
+.group-current {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1d4ed8;
+    border-radius: 10px;
+    padding: 8px 10px;
+    margin: 0.25rem 0 0.5rem 0;
+    font-weight: 600;
+    font-size: 0.92rem;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    .login-title-center h1 { font-size: 1.8rem; }
+    .logo-left-wrap img, .logo-right-wrap img { height: 84px !important; }
+    .login-title-center .subtitle { font-size: 0.98rem; }
+}
+@media (max-width: 640px) {
+    .block-container { padding-left: 0.65rem; padding-right: 0.65rem; }
+    .logo-row { gap: 12px; }
+    .logo-left-wrap img, .logo-right-wrap img { height: 72px !important; }
+    .login-title-center h1 { font-size: 1.45rem; }
+    .login-title-center .subtitle { font-size: 0.90rem; }
+    .login-shell { padding: 10px; border-radius: 16px; }
+    .login-hero, .login-card-box, .login-info-box { border-radius: 12px; }
 }
 </style>
     """,
@@ -278,23 +510,96 @@ def ensure_auth_state():
         st.session_state.show_fishbone_preview = False
 
 
+def render_login_header_hero():
+    st.markdown(
+        f"""
+        <div class="login-hero">
+            <div class="logo-row">
+                <div class="logo-left-wrap">
+                    <img src="{LOGO_HA_URL}" alt="HA Logo">
+                </div>
+                <div class="logo-right-wrap">
+                    <img src="{LOGO_MFU_URL}" alt="MFU Logo">
+                </div>
+            </div>
+            <div class="login-title-center">
+                <h1>🏡 {html.escape(CFG["APP_TITLE"])}</h1>
+                <div class="subtitle">บันทึกอุบัติการณ์ในสถานพยาบาลปฐมภูมิ</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_login_info_panel():
+    st.markdown(
+        """
+        <div class="login-info-box">
+            <div class="login-badge">สอดรับกับมาตรฐานสถานพยาบาลปฐมภูมิ (สรพ.)</div>
+
+            <div class="login-paragraph">
+                <strong>Empowering Primary Care: Learn from Every Event, Improve for Every Patient.</strong><br>
+                (เสริมศักยภาพปฐมภูมิ เรียนรู้ทุกเหตุการณ์ เพื่อมาตรฐานการดูแลผู้ป่วยทุกคน)
+            </div>
+
+            <div class="login-paragraph">
+                ระบบนี้ถูกออกแบบมาเพื่อยกระดับความปลอดภัยในหน่วยบริการปฐมภูมิ เปลี่ยนทุกการรายงานอุบัติการณ์ให้เป็นข้อมูลเชิงลึก (Insight)
+                เพื่อสนับสนุนให้คนหน้างานบริหารความเสี่ยงและพัฒนาคุณภาพได้ด้วยตนเอง โดยต่อยอดจากบริบทและทรัพยากรที่มีอยู่จริงในพื้นที่
+            </div>
+
+            <div class="login-paragraph">
+                สนับสนุนการขับเคลื่อนคุณภาพตาม <strong>ตอนที่ III-(1) การบริหารความเสี่ยงและความปลอดภัย</strong> และ
+                <strong>ตอนที่ III-(5) ระบบการจัดการด้านยา</strong> มีเครื่องมือรองรับการจัดการความคลาดเคลื่อนทางยา (Medication Error)
+                และเหตุการณ์ไม่พึงประสงค์อย่างเป็นระบบ
+            </div>
+
+            <div class="login-paragraph" style="margin-bottom:0.35rem;">
+                <strong>เปลี่ยนข้อมูล สู่ความปลอดภัยที่ยั่งยืน:</strong>
+            </div>
+
+            <div class="feature-list">
+                <div class="feature-item">
+                    <div class="feature-title">📝 บันทึกง่าย ครอบคลุม (Record with Ease)</div>
+                    <div class="feature-desc">รายงานความเสี่ยงได้รวดเร็ว ไม่เพิ่มภาระงาน</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-title">📊 วิเคราะห์ได้ด้วยตัวเอง (Local Data Analysis)</div>
+                    <div class="feature-desc">คืนข้อมูลสู่คนทำงาน เข้าถึง Dashboard เพื่อค้นหาสาเหตุรากเหง้า (Root Cause) ประเมินสถานการณ์ได้ทันที</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-title">🔄 พัฒนาอย่างต่อเนื่อง (Continuous Improvement)</div>
+                    <div class="feature-desc">ขับเคลื่อนการแก้ปัญหาด้วยข้อมูล (Data-Driven) ป้องกันการเกิดซ้ำอย่างตรงจุด</div>
+                </div>
+            </div>
+
+            <div class="quote-box">
+                <strong>"การรายงานไม่ได้มีไว้เพื่อจับผิด แต่มีไว้เพื่อเรียนรู้"</strong><br>
+                ทุกข้อมูลคือโอกาส... มาร่วมสร้าง <strong>วัฒนธรรมความปลอดภัย (Safety Culture)</strong> ที่แข็งแกร่ง
+                เพื่อยกระดับมาตรฐานการดูแลพี่น้องประชาชนในชุมชนของคุณ
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_login():
     ensure_auth_state()
 
-    st.markdown(f"# 🏡 {CFG['APP_TITLE']}")
-    st.markdown(
-        "<div class='small-muted'>บันทึกอุบัติการณ์ในสถานพยาบาลปฐมภูมิ</div>",
-        unsafe_allow_html=True,
-    )
-    st.markdown("---")
+    st.markdown('<div class="login-shell">', unsafe_allow_html=True)
+    render_login_header_hero()
 
-    c1, c2, c3 = st.columns([1, 1.6, 1])
-    with c2:
-        st.markdown("## 🔐 เข้าสู่ระบบ")
-        st.caption(f"หน่วยงาน: **{CFG['UNIT_NAME']}**")
+    left, right = st.columns([0.95, 1.85], gap="large")
 
-        username = st.text_input("ชื่อผู้ใช้", key="login_user_input")
-        password = st.text_input("รหัสผ่าน", type="password", key="login_pass_input")
+    with left:
+        st.markdown('<div class="login-card-box">', unsafe_allow_html=True)
+        st.markdown("### 🔐 เข้าสู่ระบบ")
+        st.caption(f"หน่วยงานระบบ: **{CFG['UNIT_NAME']}**")
+        st.markdown('<div class="login-widget-area">', unsafe_allow_html=True)
+
+        username = st.text_input("ชื่อผู้ใช้", key="login_user_input", placeholder="กรอกชื่อผู้ใช้")
+        password = st.text_input("รหัสผ่าน", type="password", key="login_pass_input", placeholder="กรอกรหัสผ่าน")
 
         if st.button("เข้าสู่ระบบ", use_container_width=True):
             expected_user = CFG["APP_LOGIN_USERNAME"]
@@ -314,6 +619,14 @@ def render_login():
                 st.rerun()
             else:
                 st.error("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
+
+        st.markdown("</div>", unsafe_allow_html=True)  # login-widget-area
+        st.markdown("</div>", unsafe_allow_html=True)  # login-card-box
+
+    with right:
+        render_login_info_panel()
+
+    st.markdown("</div>", unsafe_allow_html=True)  # login-shell
 
 
 # =========================
@@ -370,7 +683,7 @@ def get_worksheet():
     try:
         ws = sh.worksheet(worksheet_name)
     except gspread.WorksheetNotFound:
-        ws = sh.add_worksheet(title=worksheet_name, rows=1000, cols=60)
+        ws = sh.add_worksheet(title=worksheet_name, rows=1000, cols=80)
 
     # ensure header row
     header = ws.row_values(1)
@@ -417,37 +730,6 @@ def append_record_to_sheet(record: Dict[str, Any]) -> None:
     ws.append_row(row, value_input_option="USER_ENTERED")
 
 
-def _autofill_new_fields(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    เติม event_group/event_code/event_label ให้ข้อมูลย้อนหลัง
-    - ถ้า event_code ว่าง แต่ process_step เป็นรหัสรูปแบบ AAA999 → ใช้เป็น event_code
-    - เติม group/label จาก mapping
-    """
-    out = df.copy()
-    for c in ["event_group", "event_code", "event_label", "process_step"]:
-        if c not in out.columns:
-            out[c] = ""
-
-    # detect code-like strings
-    code_pat = re.compile(r"^[A-Z]{3}\d{3}$")
-
-    # fill event_code from process_step when possible
-    m = out["event_code"].astype(str).str.strip().eq("")
-    ps = out["process_step"].astype(str).str.strip()
-    can = ps.apply(lambda x: bool(code_pat.match(x)))
-    out.loc[m & can, "event_code"] = ps[m & can]
-
-    # fill group/label
-    codes = out["event_code"].astype(str).str.strip()
-    out.loc[out["event_label"].astype(str).str.strip().eq(""), "event_label"] = codes.map(EVENT_CODE_TO_LABEL).fillna("")
-    out.loc[out["event_group"].astype(str).str.strip().eq(""), "event_group"] = codes.map(EVENT_CODE_TO_GROUP).fillna("")
-
-    # keep legacy: process_step stores code
-    out.loc[out["process_step"].astype(str).str.strip().eq(""), "process_step"] = out["event_code"].astype(str)
-
-    return out
-
-
 @st.cache_data(show_spinner=False, ttl=30)
 def load_sheet_df() -> pd.DataFrame:
     ws = get_worksheet()
@@ -462,9 +744,7 @@ def load_sheet_df() -> pd.DataFrame:
         if c not in df.columns:
             df[c] = ""
 
-    df = df[SHEET_COLUMNS]
-    df = _autofill_new_fields(df)
-    return df
+    return df[SHEET_COLUMNS]
 
 
 # =========================
@@ -530,8 +810,8 @@ def build_docx_report_bytes(uploaded_rca_image: Optional[Any] = None) -> bytes:
     doc = Document()
 
     # Header
-    doc.add_heading("รายงาน Incident / RCA (ก่อนบันทึก)", level=1)
-    doc.add_paragraph(f"หน่วยงาน: {CFG.get('UNIT_NAME', '-')}")
+    doc.add_heading("รายงานอุบัติการณ์ / RCA (ก่อนบันทึก)", level=1)
+    doc.add_paragraph(f"หน่วยงานระบบ: {CFG.get('UNIT_NAME', '-')}")
     doc.add_paragraph(f"ระบบ: {CFG.get('APP_TITLE', '-')}")
     doc.add_paragraph(f"วันที่สร้างเอกสาร: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
@@ -558,14 +838,20 @@ def build_docx_report_bytes(uploaded_rca_image: Optional[Any] = None) -> bytes:
     else:
         event_time_text = str(event_time_val)
 
+    event_payload = get_selected_event_code_payload()
+    incident_group = st.session_state.get("form_incident_group", "")
+    severity_group = incident_group
+    severity_code = str(st.session_state.get("form_severity", "") or "")
+    severity_desc = get_severity_dict_for_group(severity_group).get(severity_code, "")
+
+    add_row("หน่วย", st.session_state.get("form_unit_name", ""))
     add_row("วันที่เกิดเหตุ", event_date_text)
     add_row("เวลาเกิดเหตุ", event_time_text)
-
-    add_row("กลุ่มเหตุการณ์", st.session_state.get("form_event_group", ""))
-    add_row("รหัสกระบวนการย่อย", st.session_state.get("form_event_code", ""))
-    add_row("รายละเอียดกระบวนการย่อย", st.session_state.get("form_event_label", ""))
-
-    add_row("ระดับความรุนแรง", st.session_state.get("form_severity", ""))
+    add_row("กลุ่มเหตุการณ์", incident_group)
+    add_row("รหัสเหตุการณ์", event_payload.get("code", ""))
+    add_row("หัวข้อเหตุการณ์", event_payload.get("label", ""))
+    add_row("ระดับความรุนแรง", severity_code)
+    add_row("คำอธิบายระดับความรุนแรง", severity_desc)
 
     # รายละเอียดเหตุการณ์
     doc.add_heading("2) รายละเอียดเหตุการณ์", level=2)
@@ -930,7 +1216,7 @@ def render_analysis_result(analysis: Dict[str, Any]):
     else:
         st.write("-")
 
-    # 3) Fishbone (รายละเอียดเท่านั้น)
+    # 3) Fishbone (แสดงเฉพาะรายละเอียด ไม่แสดงภาพ)
     st.markdown("### 3) แผนผังก้างปลา (Ishikawa) — รายละเอียด")
     fishbone = analysis.get("fishbone", {}) or {}
     effect = fishbone.get("effect", "") or analysis.get("event_summary", "เหตุการณ์ / ผลลัพธ์")
@@ -1062,48 +1348,20 @@ def render_plan_result(plan: Dict[str, Any]):
 # FORM / SAVE
 # =========================
 
-def _get_default_event_code(group: str) -> str:
-    items = EVENT_CATEGORIES.get(group, [])
-    return items[0][0] if items else ""
-
-
-def _get_event_label(code: str) -> str:
-    return EVENT_CODE_TO_LABEL.get(code, "")
-
-
-def ensure_event_state_consistency():
-    """
-    ทำให้ state ของ group/code/label/severity สอดคล้องกัน
-    ต้องเรียกก่อนสร้าง widget เสมอ
-    """
-    if "form_event_group" not in st.session_state:
-        st.session_state["form_event_group"] = EVENT_GROUPS[0]
-
-    g = st.session_state.get("form_event_group") or EVENT_GROUPS[0]
-    if g not in EVENT_CATEGORIES:
-        g = EVENT_GROUPS[0]
-        st.session_state["form_event_group"] = g
-
-    valid_codes = [c for c, _ in EVENT_CATEGORIES.get(g, [])]
-    if "form_event_code" not in st.session_state or st.session_state.get("form_event_code") not in valid_codes:
-        st.session_state["form_event_code"] = _get_default_event_code(g)
-
-    code = st.session_state.get("form_event_code") or ""
-    st.session_state["form_event_label"] = _get_event_label(code)
-
-    # severity options depend on group
-    if g == "People Safety":
-        if "form_severity" not in st.session_state or st.session_state.get("form_severity") not in PEOPLE_SEVERITY_OPTIONS:
-            st.session_state["form_severity"] = "1"
-    else:
-        if "form_severity" not in st.session_state or st.session_state.get("form_severity") not in SEVERITY_OPTIONS:
-            st.session_state["form_severity"] = "A"
-
-
 def init_form_state_defaults():
     defaults = {
+        "form_unit_name": UNIT_OPTIONS[0],
         "form_event_date": date.today(),
         "form_event_time": datetime.now().time().replace(second=0, microsecond=0),
+
+        "form_incident_group": GROUP_OPTIONS[0],
+        "form_incident_code_search": "",
+        "form_incident_code_choice_display": "",
+        "form_incident_code_other_code": "",
+        "form_incident_code_other_label": "",
+
+        "form_severity": "A",
+
         "form_incident_detail": "",
         "form_timeline_text": "",
         "form_initial_correction": "",
@@ -1116,17 +1374,53 @@ def init_form_state_defaults():
         if k not in st.session_state:
             st.session_state[k] = v
 
-    ensure_event_state_consistency()
+    # ให้ default code เป็นตัวแรกของกลุ่ม (ถ้ายังไม่เคยเลือก)
+    if not st.session_state.get("form_incident_code_choice_display"):
+        first_items = get_group_code_items(st.session_state["form_incident_group"])
+        if first_items:
+            st.session_state["form_incident_code_choice_display"] = f"{first_items[0]['code']} — {first_items[0]['label']}"
+
+
+def _reset_event_code_selection_for_group(group_name: str):
+    items = get_group_code_items(group_name)
+    st.session_state["form_incident_code_search"] = ""
+    st.session_state["form_incident_code_other_code"] = ""
+    st.session_state["form_incident_code_other_label"] = ""
+    if items:
+        st.session_state["form_incident_code_choice_display"] = f"{items[0]['code']} — {items[0]['label']}"
+    else:
+        st.session_state["form_incident_code_choice_display"] = ""
+
+    # reset severity ตาม scheme ใหม่
+    if get_severity_scheme_for_group(group_name) == "1-5":
+        st.session_state["form_severity"] = "1"
+    else:
+        st.session_state["form_severity"] = "A"
 
 
 def validate_required_form() -> Tuple[bool, List[str]]:
     errs: List[str] = []
-    if not st.session_state.get("form_event_group", "").strip():
+
+    if not st.session_state.get("form_unit_name", "").strip():
+        errs.append("กรุณาเลือกหน่วย")
+
+    group_name = st.session_state.get("form_incident_group", "").strip()
+    if not group_name:
         errs.append("กรุณาเลือกกลุ่มเหตุการณ์")
-    if not st.session_state.get("form_event_code", "").strip():
-        errs.append("กรุณาเลือกกระบวนการย่อย")
+
+    event_payload = get_selected_event_code_payload()
+    if not str(event_payload.get("code", "")).strip():
+        errs.append("กรุณาเลือกรหัสเหตุการณ์ หรือกรอกรหัสในช่องอื่น ๆ")
+    if not str(event_payload.get("label", "")).strip():
+        errs.append("กรุณาระบุหัวข้อเหตุการณ์ (กรณีเลือกอื่น ๆ)")
+
     if not st.session_state.get("form_incident_detail", "").strip():
         errs.append("กรุณากรอกรายละเอียดเหตุการณ์")
+
+    sev = str(st.session_state.get("form_severity", "")).strip()
+    if not sev:
+        errs.append("กรุณาเลือกระดับความรุนแรง")
+
     return (len(errs) == 0, errs)
 
 
@@ -1152,26 +1446,38 @@ def create_record_from_form(
     else:
         event_time_str = str(event_time_val)
 
-    g = st.session_state.get("form_event_group", "").strip()
-    code = st.session_state.get("form_event_code", "").strip()
-    label = st.session_state.get("form_event_label", "").strip()
+    group_name = str(st.session_state.get("form_incident_group", "") or "").strip()
+    event_payload = get_selected_event_code_payload()
+
+    severity_code = str(st.session_state.get("form_severity", "") or "").strip()
+    severity_scheme = get_severity_scheme_for_group(group_name)
+    severity_desc = get_severity_dict_for_group(group_name).get(severity_code, "")
+
+    incident_code = str(event_payload.get("code", "") or "").strip()
+    incident_label = str(event_payload.get("label", "") or "").strip()
+
+    # process_step เดิมใช้เก็บ string ของหัวข้อเหตุการณ์เพื่อความเข้ากันได้
+    process_step_text = f"{incident_code} : {incident_label}".strip(" :")
 
     record = {
         "record_id": now.strftime("%Y%m%d%H%M%S%f"),
-        "unit_name": CFG["UNIT_NAME"],
+        "unit_name": st.session_state.get("form_unit_name", "").strip() or CFG["UNIT_NAME"],
         "app_title": CFG["APP_TITLE"],
         "event_date": event_date_str,
         "event_time": event_time_str,
 
-        "event_group": g,
-        "event_code": code,
-        "event_label": label,
+        "process_step": process_step_text,
+        "drug_name": "",  # เอาออกจากฟอร์มแล้ว แต่คงคอลัมน์ไว้
 
-        # legacy
-        "process_step": code,
-        "drug_name": "",
+        "incident_group": group_name,
+        "incident_code": incident_code,
+        "incident_code_label": incident_label,
+        "incident_code_other": str(event_payload.get("other", "") or "").strip(),
 
-        "severity_level": st.session_state.get("form_severity", ""),
+        "severity_scheme": severity_scheme,
+        "severity_level": severity_code,
+        "severity_description": severity_desc,
+
         "incident_detail": st.session_state.get("form_incident_detail", "").strip(),
         "timeline_text": st.session_state.get("form_timeline_text", "").strip(),
         "initial_correction": st.session_state.get("form_initial_correction", "").strip(),
@@ -1194,27 +1500,122 @@ def request_form_reset_after_save():
 def apply_pending_form_reset():
     """ถ้ามี flag ให้ล้างฟอร์มก่อนสร้าง widget"""
     if st.session_state.get("_reset_form_after_save", False):
+        st.session_state["form_unit_name"] = UNIT_OPTIONS[0]
+        st.session_state["form_event_date"] = date.today()
+        st.session_state["form_event_time"] = datetime.now().time().replace(second=0, microsecond=0)
+
+        st.session_state["form_incident_group"] = GROUP_OPTIONS[0]
+        _reset_event_code_selection_for_group(GROUP_OPTIONS[0])
+
         st.session_state["form_incident_detail"] = ""
         st.session_state["form_timeline_text"] = ""
         st.session_state["form_initial_correction"] = ""
         st.session_state["form_rca_text"] = ""
         st.session_state["form_development_plan"] = ""
-        st.session_state["form_event_date"] = date.today()
-        st.session_state["form_event_time"] = datetime.now().time().replace(second=0, microsecond=0)
         st.session_state["rca_analysis_json"] = None
         st.session_state["rca_plan_json"] = None
         st.session_state["show_fishbone_preview"] = False
-
-        # reset category
-        st.session_state["form_event_group"] = EVENT_GROUPS[0]
-        st.session_state["form_event_code"] = _get_default_event_code(EVENT_GROUPS[0])
-        st.session_state["form_event_label"] = _get_event_label(st.session_state["form_event_code"])
-        st.session_state["form_severity"] = "A"
 
         # เคลียร์ file_uploader
         st.session_state.pop("form_rca_image", None)
 
         st.session_state["_reset_form_after_save"] = False
+
+
+def render_group_selector_buttons():
+    st.markdown("### ประเภทเหตุการณ์")
+    current_group = st.session_state.get("form_incident_group", GROUP_OPTIONS[0])
+
+    cols = st.columns(2, gap="small")
+    for idx, group_name in enumerate(GROUP_OPTIONS):
+        with cols[idx % 2]:
+            btn_type = "primary" if current_group == group_name else "secondary"
+            if st.button(group_name, key=f"group_btn_{idx}", use_container_width=True, type=btn_type):
+                st.session_state["form_incident_group"] = group_name
+                _reset_event_code_selection_for_group(group_name)
+                st.rerun()
+
+    st.markdown(
+        f"<div class='group-current'>กลุ่มที่เลือก: {html.escape(st.session_state.get('form_incident_group', '-'))}</div>",
+        unsafe_allow_html=True
+    )
+
+
+def render_incident_code_picker():
+    group_name = st.session_state.get("form_incident_group", GROUP_OPTIONS[0])
+    items = get_group_code_items(group_name)
+
+    st.markdown("### รหัสเหตุการณ์ / กระบวนการย่อย")
+    st.caption("พิมพ์ค้นหาได้ทั้งรหัส (เช่น CPM201) หรือข้อความ")
+
+    search_text = st.text_input(
+        "ค้นหารหัสเหตุการณ์",
+        key="form_incident_code_search",
+        placeholder="เช่น CPM, fall, network, privacy ..."
+    ).strip().lower()
+
+    def _matches(it: Dict[str, str]) -> bool:
+        if not search_text:
+            return True
+        hay = f"{it.get('code','')} {it.get('label','')}".lower()
+        return search_text in hay
+
+    filtered_items = [it for it in items if _matches(it)]
+    if not filtered_items:
+        st.warning("ไม่พบรหัสที่ตรงกับคำค้นหา กรุณาลองคำค้นอื่น หรือเลือก 'อื่น ๆ (ระบุเอง)'")
+        filtered_items = [{"code": "OTHER", "label": "อื่น ๆ (ระบุเอง)"}]
+
+    display_options = [f"{it['code']} — {it['label']}" for it in filtered_items]
+
+    current_value = st.session_state.get("form_incident_code_choice_display", "")
+    if current_value not in display_options:
+        st.session_state["form_incident_code_choice_display"] = display_options[0]
+
+    st.selectbox(
+        "เลือกรหัสเหตุการณ์",
+        options=display_options,
+        key="form_incident_code_choice_display",
+    )
+
+    chosen_display = st.session_state.get("form_incident_code_choice_display", "")
+    is_other = chosen_display.startswith("OTHER —")
+
+    if is_other:
+        c1, c2 = st.columns([1, 2])
+        with c1:
+            st.text_input("รหัส (อื่น ๆ)", key="form_incident_code_other_code", placeholder="เช่น XXX999")
+        with c2:
+            st.text_input("หัวข้อเหตุการณ์ (อื่น ๆ)", key="form_incident_code_other_label", placeholder="ระบุหัวข้อเหตุการณ์")
+
+    payload = get_selected_event_code_payload()
+    st.caption(f"เลือกแล้ว: **{payload.get('code','-')}** — {payload.get('label','-')}")
+
+
+def render_severity_picker():
+    group_name = st.session_state.get("form_incident_group", GROUP_OPTIONS[0])
+    sev_map = get_severity_dict_for_group(group_name)
+    options = list(sev_map.keys())
+
+    # ตรวจสอบค่าเดิมว่ายังใช้ได้ไหม
+    cur = str(st.session_state.get("form_severity", "") or "")
+    if cur not in options:
+        st.session_state["form_severity"] = options[0]
+
+    st.markdown("### ระดับความรุนแรง")
+    scheme_text = "1–5" if get_severity_scheme_for_group(group_name) == "1-5" else "A–I"
+    st.caption(f"รูปแบบระดับความรุนแรงสำหรับกลุ่มนี้: **{scheme_text}**")
+
+    st.selectbox(
+        "เลือกระดับความรุนแรง",
+        options=options,
+        key="form_severity",
+        format_func=lambda x: severity_format(group_name, str(x)),
+    )
+
+    selected_code = str(st.session_state.get("form_severity", "") or "")
+    desc = sev_map.get(selected_code, "")
+    if desc:
+        st.info(f"**{selected_code}** : {desc}")
 
 
 def render_entry_tab():
@@ -1226,7 +1627,7 @@ def render_entry_tab():
 
     st.markdown("## 📝 บันทึกข้อมูล")
 
-    left, right = st.columns([1.15, 1], gap="large")
+    left, right = st.columns([1.18, 1], gap="large")
 
     # ใช้อัปโหลดภาพ RCA ตัวเดียว ทั้งแสดงผล/ส่ง AI/ส่งขึ้น Drive
     uploaded_rca_image = None
@@ -1234,58 +1635,25 @@ def render_entry_tab():
     with left:
         st.markdown("### ข้อมูลเหตุการณ์")
 
+        # ✅ เพิ่มหน่วยไว้บนสุด
+        st.selectbox("หน่วย", UNIT_OPTIONS, key="form_unit_name")
+
+        # ✅ เลือกกลุ่มแบบปุ่ม
+        render_group_selector_buttons()
+
+        # ✅ เลือกรหัสเหตุการณ์แบบค้นหาได้
+        render_incident_code_picker()
+
         c1, c2 = st.columns(2)
         with c1:
             st.date_input("วันที่เกิดเหตุ", key="form_event_date")
         with c2:
             st.time_input("เวลาเกิดเหตุ", key="form_event_time")
 
-        # ---- NEW: group buttons + sub-process selection ----
-        st.markdown("#### เลือกกลุ่มเหตุการณ์")
-        st.caption("เลือก 1 กลุ่ม แล้วเลือกกระบวนการย่อย (รหัส/รายละเอียด)")
+        # ✅ ชื่อยาเอาออกแล้ว
+        render_severity_picker()
 
-        group = st.radio(
-            "กลุ่มเหตุการณ์",
-            options=EVENT_GROUPS,
-            key="form_event_group",
-            horizontal=True,
-            label_visibility="collapsed",
-        )
-
-        # ensure code is valid for group
-        ensure_event_state_consistency()
-
-        codes = [c for c, _ in EVENT_CATEGORIES.get(group, [])]
-        st.selectbox(
-            "กระบวนการย่อย (รหัส — รายละเอียด)",
-            options=codes,
-            key="form_event_code",
-            format_func=lambda c: f"{c} — {EVENT_CODE_TO_LABEL.get(c,'')}",
-        )
-
-        # update label
-        st.session_state["form_event_label"] = _get_event_label(st.session_state.get("form_event_code", ""))
-
-        # ---- Severity depends on group ----
-        st.markdown("#### ระดับความรุนแรง")
-        if group == "People Safety":
-            st.selectbox(
-                "ระดับความรุนแรง (People Safety: 1–5)",
-                options=PEOPLE_SEVERITY_OPTIONS,
-                key="form_severity",
-            )
-            sev = str(st.session_state.get("form_severity", "1"))
-            st.markdown(f"<div class='sev-box'><strong>คำอธิบายระดับ {sev}</strong><br>{html.escape(PEOPLE_SEVERITY_DESC.get(sev,'-'))}</div>", unsafe_allow_html=True)
-        else:
-            st.selectbox(
-                "ระดับความรุนแรง (A–I)",
-                options=SEVERITY_OPTIONS,
-                key="form_severity",
-            )
-            sev = str(st.session_state.get("form_severity", "A"))
-            st.markdown(f"<div class='sev-box'><strong>คำอธิบายระดับ {sev}</strong><br>{html.escape(SEVERITY_DESC.get(sev,'-'))}</div>", unsafe_allow_html=True)
-
-        st.text_area("รายละเอียดเหตุการณ์", height=160, key="form_incident_detail")
+        st.text_area("รายละเอียดเหตุการณ์", height=150, key="form_incident_detail")
 
         st.markdown("---")
         st.markdown("### ข้อมูลเสริม (ก่อนบันทึก)")
@@ -1318,7 +1686,7 @@ def render_entry_tab():
             st.download_button(
                 "📄 ดาวน์โหลดรายงาน DOCX (ก่อนบันทึก)",
                 data=docx_bytes,
-                file_name=f"Incident_RCA_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
+                file_name=f"RCA_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 use_container_width=True,
             )
@@ -1367,36 +1735,25 @@ def render_entry_tab():
 
         st.info(
             "หลักการใช้งาน: ปุ่ม RCA Assistant จะ **ไม่บันทึกลง Google Sheets** โดยอัตโนมัติ\n"
-            "→ ผู้ใช้ตรวจทานผลลัพธ์ ก่อนนำไปกรอกฟอร์มเอง แล้วค่อยกด **บันทึกข้อมูล**"
+            "→ ผู้ใช้ตรวจทานผลลัพธ์ ก่อนนำไปกรอกในฟอร์ม แล้วค่อยกด **บันทึกข้อมูล**"
         )
 
+        # ปุ่ม AI
         if st.button("🧸 RCA Assistant", use_container_width=True):
-            incident_detail = st.session_state.get("form_incident_detail", "").strip()
-            if not incident_detail:
+            incident_text = st.session_state.get("form_incident_detail", "").strip()
+            if not incident_text:
                 st.warning("กรุณากรอกรายละเอียดเหตุการณ์ก่อน")
             else:
                 try:
-                    g = st.session_state.get("form_event_group", "")
-                    code = st.session_state.get("form_event_code", "")
-                    label = st.session_state.get("form_event_label", "")
-                    sev = st.session_state.get("form_severity", "")
-
-                    context_text = (
-                        f"กลุ่มเหตุการณ์: {g}\n"
-                        f"กระบวนการย่อย: {code} — {label}\n"
-                        f"ระดับความรุนแรง: {sev}\n\n"
-                        f"รายละเอียดเหตุการณ์:\n{incident_detail}"
-                    )
-
                     with st.spinner("กำลังวิเคราะห์ RCA..."):
                         analysis = call_gemini_json(
-                            prompt=build_analysis_prompt(context_text),
+                            prompt=build_analysis_prompt(incident_text),
                             api_key=CFG["GEMINI_API_KEY"],
                             image_file=uploaded_rca_image,
                             timeout_sec=90,
                         )
                         plan = call_gemini_json(
-                            prompt=build_plan_prompt(context_text, analysis),
+                            prompt=build_plan_prompt(incident_text, analysis),
                             api_key=CFG["GEMINI_API_KEY"],
                             timeout_sec=90,
                         )
@@ -1421,7 +1778,7 @@ def render_entry_tab():
 
 
 # =========================
-# HISTORY TAB (with date fixes + new fields)
+# HISTORY TAB (with date fixes)
 # =========================
 
 def parse_event_datetime_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -1459,6 +1816,14 @@ def render_history_tab():
         st.info("ยังไม่มีข้อมูลใน Google Sheets")
         return
 
+    # ensure columns for backward compatibility
+    for c in [
+        "incident_group", "incident_code", "incident_code_label", "incident_code_other",
+        "severity_scheme", "severity_description"
+    ]:
+        if c not in df.columns:
+            df[c] = ""
+
     df = parse_event_datetime_columns(df)
 
     valid_dates_series = df["_event_date_dt"].dropna()
@@ -1481,28 +1846,37 @@ def render_history_tab():
     with c2:
         end_date = st.date_input("วันที่สิ้นสุด", value=max_d, key="hist_end")
     with c3:
-        grp_selected = st.multiselect(
+        group_selected = st.multiselect(
             "กลุ่มเหตุการณ์",
-            options=sorted([x for x in df["event_group"].dropna().astype(str).unique() if x]),
+            options=sorted([x for x in df["incident_group"].dropna().astype(str).unique() if x]),
             default=[],
-            key="hist_grp",
+            key="hist_group",
         )
     with c4:
-        keyword = st.text_input("ค้นหา (รหัส/รายละเอียด/ข้อความ)", key="hist_kw").strip()
+        keyword = st.text_input("ค้นหา (รหัส/หัวข้อ/รายละเอียด)", key="hist_kw").strip()
 
-    code_selected = st.multiselect(
-        "กระบวนการย่อย (รหัส)",
-        options=sorted([x for x in df["event_code"].dropna().astype(str).unique() if x]),
-        default=[],
-        key="hist_code",
-    )
-
-    sev_selected = st.multiselect(
-        "ระดับความรุนแรง",
-        options=sorted([x for x in df["severity_level"].dropna().astype(str).unique() if x]),
-        default=[],
-        key="hist_sev",
-    )
+    c5, c6, c7 = st.columns([1.2, 1, 1])
+    with c5:
+        unit_selected = st.multiselect(
+            "หน่วย",
+            options=sorted([x for x in df["unit_name"].dropna().astype(str).unique() if x]),
+            default=[],
+            key="hist_unit",
+        )
+    with c6:
+        sev_selected = st.multiselect(
+            "ระดับความรุนแรง",
+            options=sorted([x for x in df["severity_level"].dropna().astype(str).unique() if x]),
+            default=[],
+            key="hist_sev",
+        )
+    with c7:
+        code_selected = st.multiselect(
+            "รหัสเหตุการณ์",
+            options=sorted([x for x in df["incident_code"].dropna().astype(str).unique() if x]),
+            default=[],
+            key="hist_code",
+        )
 
     if start_date > end_date:
         st.warning("วันที่เริ่มมากกว่าวันที่สิ้นสุด ระบบจะสลับให้โดยอัตโนมัติ")
@@ -1513,25 +1887,27 @@ def render_history_tab():
     m &= df["_event_date_only"].notna()
     m &= (df["_event_date_only"] >= start_date) & (df["_event_date_only"] <= end_date)
 
-    if grp_selected:
-        m &= df["event_group"].astype(str).isin(grp_selected)
+    if unit_selected:
+        m &= df["unit_name"].astype(str).isin(unit_selected)
 
-    if code_selected:
-        m &= df["event_code"].astype(str).isin(code_selected)
+    if group_selected:
+        m &= df["incident_group"].astype(str).isin(group_selected)
 
     if sev_selected:
         m &= df["severity_level"].astype(str).isin(sev_selected)
 
+    if code_selected:
+        m &= df["incident_code"].astype(str).isin(code_selected)
+
     if keyword:
         kw = keyword.lower()
         m &= (
-            df["event_code"].astype(str).str.lower().str.contains(kw, na=False)
-            | df["event_label"].astype(str).str.lower().str.contains(kw, na=False)
+            df["incident_code"].astype(str).str.lower().str.contains(kw, na=False)
+            | df["incident_code_label"].astype(str).str.lower().str.contains(kw, na=False)
             | df["incident_detail"].astype(str).str.lower().str.contains(kw, na=False)
-            | df["timeline_text"].astype(str).str.lower().str.contains(kw, na=False)
-            | df["initial_correction"].astype(str).str.lower().str.contains(kw, na=False)
             | df["rca_text"].astype(str).str.lower().str.contains(kw, na=False)
             | df["development_plan"].astype(str).str.lower().str.contains(kw, na=False)
+            | df["process_step"].astype(str).str.lower().str.contains(kw, na=False)
         )
 
     filtered = df[m].copy()
@@ -1550,17 +1926,39 @@ def render_history_tab():
         with s1:
             st.metric("จำนวนรายการ", f"{len(filtered):,}")
         with s2:
-            st.metric("กลุ่มเหตุการณ์", str(filtered["event_group"].astype(str).replace('', pd.NA).dropna().nunique()))
+            st.metric(
+                "จำนวนหน่วยที่มีข้อมูล",
+                str(filtered["unit_name"].astype(str).replace("", pd.NA).dropna().nunique()),
+            )
         with s3:
-            st.metric("หน่วยงาน", str(filtered["unit_name"].astype(str).replace('', pd.NA).dropna().nunique()))
+            st.metric(
+                "จำนวนรหัสเหตุการณ์ไม่ซ้ำ",
+                f"{filtered['incident_code'].astype(str).replace('', pd.NA).dropna().nunique():,}",
+            )
+
+    # display-friendly combined column
+    if not filtered.empty:
+        filtered["incident_code_display"] = filtered.apply(format_incident_choice_for_history, axis=1)
+    else:
+        filtered["incident_code_display"] = ""
 
     display_cols = [
-        "event_date", "event_time",
-        "event_group", "event_code", "event_label",
+        "unit_name",
+        "event_date",
+        "event_time",
+        "incident_group",
+        "incident_code_display",
         "severity_level",
-        "incident_detail", "timeline_text", "initial_correction", "rca_text",
-        "rca_image_filename", "rca_image_drive_url",
-        "development_plan", "created_at", "created_by"
+        "severity_description",
+        "incident_detail",
+        "timeline_text",
+        "initial_correction",
+        "rca_text",
+        "rca_image_filename",
+        "rca_image_drive_url",
+        "development_plan",
+        "created_at",
+        "created_by",
     ]
 
     for c in display_cols:
@@ -1572,12 +1970,13 @@ def render_history_tab():
         use_container_width=True,
         hide_index=True,
         column_config={
+            "unit_name": "หน่วย",
             "event_date": "วันที่",
             "event_time": "เวลา",
-            "event_group": "กลุ่มเหตุการณ์",
-            "event_code": "รหัส",
-            "event_label": "รายละเอียดกระบวนการย่อย",
-            "severity_level": "ระดับความรุนแรง",
+            "incident_group": "กลุ่มเหตุการณ์",
+            "incident_code_display": "รหัสเหตุการณ์/หัวข้อ",
+            "severity_level": "ระดับ",
+            "severity_description": "คำอธิบายระดับ",
             "incident_detail": "รายละเอียดเหตุการณ์",
             "timeline_text": "ไทม์ไลน์",
             "initial_correction": "การแก้ไขเบื้องต้น",
@@ -1595,13 +1994,13 @@ def render_history_tab():
     st.download_button(
         "⬇️ ดาวน์โหลดผลลัพธ์ (CSV)",
         data=csv_bytes,
-        file_name=f"incident_history_{CFG['UNIT_NAME']}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+        file_name=f"incident_history_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
         mime="text/csv",
         use_container_width=False,
     )
 
     # detail viewer
-    with st.expander("🔍 ดูรายละเอียดรายรายการ (เลือกจากตารางด้านล่างสุด 20 รายการ)"):
+    with st.expander("🔍 ดูรายละเอียดรายรายการ (เลือกจากตารางด้านบนสุด 20 รายการ)"):
         preview = filtered.head(20).copy()
         if preview.empty:
             st.write("ไม่มีข้อมูล")
@@ -1609,7 +2008,10 @@ def render_history_tab():
             labels = []
             for _, r in preview.iterrows():
                 labels.append(
-                    f"{r.get('event_date','')} {r.get('event_time','')} | {r.get('event_code','-')} | ระดับ {r.get('severity_level','-')}"
+                    f"{r.get('event_date','')} {r.get('event_time','')} | "
+                    f"{r.get('unit_name','-')} | "
+                    f"{r.get('incident_code','') or '-'} | "
+                    f"ระดับ {r.get('severity_level','-')}"
                 )
             selected_idx = st.selectbox(
                 "เลือกเหตุการณ์",
@@ -1618,8 +2020,14 @@ def render_history_tab():
             )
             row = preview.iloc[int(selected_idx)]
 
-            st.markdown("### สรุปประเภท")
-            st.write(f"{row.get('event_group','')} / {row.get('event_code','')} — {row.get('event_label','')}")
+            st.markdown("### ข้อมูลหลัก")
+            st.markdown(f"- **หน่วย:** {row.get('unit_name', '')}")
+            st.markdown(f"- **กลุ่มเหตุการณ์:** {row.get('incident_group', '')}")
+            st.markdown(f"- **รหัสเหตุการณ์:** {row.get('incident_code', '')}")
+            st.markdown(f"- **หัวข้อเหตุการณ์:** {row.get('incident_code_label', '')}")
+            st.markdown(f"- **ระดับความรุนแรง:** {row.get('severity_level', '')}")
+            if str(row.get("severity_description", "")).strip():
+                st.markdown(f"- **คำอธิบายระดับ:** {row.get('severity_description', '')}")
 
             st.markdown("### รายละเอียดเหตุการณ์")
             st.write(row.get("incident_detail", ""))
@@ -1651,7 +2059,7 @@ def render_history_tab():
 
 def render_header():
     st.markdown(f"# 🏡 {CFG['APP_TITLE']}")
-    st.caption(f"หน่วยงาน: {CFG['UNIT_NAME']}  |  บันทึกอุบัติการณ์ในสถานพยาบาลปฐมภูมิ")
+    st.caption(f"ระบบบันทึกอุบัติการณ์ในสถานพยาบาลปฐมภูมิ")
 
     c1, c2 = st.columns([1, 6])
     with c1:
