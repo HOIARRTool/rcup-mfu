@@ -168,6 +168,59 @@ st.markdown(
     font-size: .88rem;
     line-height: 1.45;
 }
+/* ===== login brand header (logos + title center) ===== */
+.login-brand-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-top: 6px;
+    margin-bottom: 8px;
+}
+
+.login-logos {
+    display: flex;
+    align-items: flex-end;   /* จัดฐานล่างให้แนวเดียวกัน */
+    justify-content: center;
+    gap: 42px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.login-logo {
+    height: 180px;           /* ลดขนาดลงประมาณครึ่งหนึ่ง */
+    width: auto;
+    object-fit: contain;
+    display: block;
+}
+
+.login-logo-left {
+    transform: translateY(14px);  /* ขยับโลโก้แรกลง */
+}
+
+.login-logo-right {
+    transform: translateY(0px);
+}
+
+.login-title-center {
+    text-align: center;
+    margin-top: 2px;
+}
+
+.login-title-center h1 {
+    margin: 0;
+    font-size: 2.2rem;
+    line-height: 1.1;
+    color: #2f2f46;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+}
+
+.login-title-center .subtitle {
+    margin-top: 8px;
+    color: #6b7280;
+    font-size: 1rem;
+}
 </style>
     """,
     unsafe_allow_html=True,
@@ -190,29 +243,29 @@ def ensure_auth_state():
 def render_login():
     ensure_auth_state()
 
-    st.markdown(f"# 🏡 {CFG['APP_TITLE']}")
+    # ส่วนบน: โลโก้ 2 อัน + ชื่อระบบตรงกลางใต้โลโก้
     st.markdown(
-        "<div class='small-muted'>บันทึกอุบัติการณ์ในสถานพยาบาลปฐมภูมิ</div>",
+        f"""
+        <div class="login-brand-wrap">
+            <div class="login-logos">
+                <img class="login-logo login-logo-left"
+                     src="https://github.com/HOIARRTool/appqtbi/blob/main/messageImage_1763018963411.jpg?raw=1"
+                     alt="Logo 1" />
+                <img class="login-logo login-logo-right"
+                     src="https://mfu.ac.th/fileadmin/_processed_/6/7/csm_logo_mfu_3d_colour_15e5a7a50f.png"
+                     alt="Logo 2" />
+            </div>
+
+            <div class="login-title-center">
+                <h1>🏡 {CFG['APP_TITLE']}</h1>
+                <div class="subtitle">บันทึกอุบัติการณ์ในสถานพยาบาลปฐมภูมิ</div>
+            </div>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
+
     st.markdown("---")
-
-    # โลโก้ 2 อันด้านบนตรงกลาง
-    top_l, top_c, top_r = st.columns([1, 2.2, 1])
-    with top_c:
-        lg1, lg2 = st.columns(2)
-        with lg1:
-            st.image(
-                "https://github.com/HOIARRTool/appqtbi/blob/main/messageImage_1763018963411.jpg?raw=1",
-                use_container_width=True,
-            )
-        with lg2:
-            st.image(
-                "https://mfu.ac.th/fileadmin/_processed_/6/7/csm_logo_mfu_3d_colour_15e5a7a50f.png",
-                use_container_width=True,
-            )
-
-    st.markdown("")
 
     # ซ้าย = เนื้อหา, ขวา = กล่อง login เล็กด้านบน
     left, right = st.columns([1.8, 1], gap="large")
@@ -257,7 +310,6 @@ def render_login():
         )
 
     with right:
-        # กล่อง login ด้านบนขวา (เล็ก)
         try:
             login_box = st.container(border=True)
         except TypeError:
