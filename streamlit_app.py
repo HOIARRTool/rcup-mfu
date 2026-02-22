@@ -5,6 +5,7 @@ import os
 import re
 import json
 import html
+import textwrap
 from io import BytesIO
 from datetime import datetime, date, time
 from typing import Any, Dict, List, Optional, Tuple
@@ -129,97 +130,204 @@ st.markdown(
     margin-bottom: .5rem;
 }
 
-/* login page */
-.hero-box {
-    border: 1px solid #e5e7eb;
-    border-radius: 16px;
-    padding: 18px 18px 10px 18px;
-    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-}
-.hero-title {
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: #0f172a;
-    margin-bottom: .35rem;
-}
-.hero-sub {
-    font-size: .95rem;
-    color: #334155;
-    margin-bottom: .75rem;
-    line-height: 1.5;
-}
-.hero-text {
-    color: #334155;
-    font-size: .92rem;
-    line-height: 1.55;
-}
-.hero-quote {
-    margin-top: 10px;
-    padding: 10px 12px;
-    border-left: 4px solid #0ea5e9;
-    background: #f0f9ff;
-    border-radius: 8px;
-    color: #0c4a6e;
-    font-weight: 600;
-    font-size: .92rem;
-}
-.mini-note {
-    color: #475569;
-    font-size: .88rem;
-    line-height: 1.45;
-}
-/* ===== login brand header (logos + title center) ===== */
+/* ---------- Login Page / Hero ---------- */
 .login-brand-wrap {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    margin-top: 6px;
-    margin-bottom: 8px;
+    text-align: center;
+    margin-top: 0.15rem;
+    margin-bottom: 0.45rem;
 }
-
 .login-logos {
     display: flex;
-    align-items: flex-end;   /* จัดฐานล่างให้แนวเดียวกัน */
     justify-content: center;
-    gap: 42px;
-    margin-bottom: 8px;
+    align-items: flex-end;      /* ให้ฐานโลโก้เสมอกัน */
+    gap: 2rem;
     flex-wrap: wrap;
+    margin-bottom: 0.35rem;
 }
-
-.login-logo {
-    height: 180px;           /* ลดขนาดลงประมาณครึ่งหนึ่ง */
+.logo-slot {
+    height: 122px;              /* ความสูง slot เท่ากัน */
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+.login-logo-left {
+    height: 96px;               /* ปรับ visual weight ให้ใกล้กัน */
     width: auto;
     object-fit: contain;
-    display: block;
+    transform: translateY(10px) scale(1.14);  /* ขยับลง + ขยายเล็กน้อย */
 }
-
-.login-logo-left {
-    transform: translateY(14px);  /* ขยับโลโก้แรกลง */
-}
-
 .login-logo-right {
-    transform: translateY(0px);
+    height: 108px;
+    width: auto;
+    object-fit: contain;
+    transform: translateY(8px) scale(0.96);   /* ย่อเล็กน้อยให้สมดุล */
 }
-
-.login-title-center {
-    text-align: center;
-    margin-top: 2px;
-}
-
 .login-title-center h1 {
-    margin: 0;
-    font-size: 2.2rem;
-    line-height: 1.1;
-    color: #2f2f46;
+    margin: 0.15rem 0 0.1rem 0;
+    font-size: 2.35rem;
+    line-height: 1.15;
     font-weight: 800;
-    letter-spacing: 0.3px;
+    color: #2f2f45;
+    letter-spacing: 0.2px;
+}
+.login-title-center .subtitle {
+    margin-top: 0.15rem;
+    font-size: 1.08rem;
+    color: #4b5563;
+    font-weight: 500;
+}
+.login-divider {
+    margin: 0.8rem 0 1.1rem 0;
+    border: none;
+    border-top: 1px solid #e5e7eb;
+}
+.login-panel-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    background: #ffffff;
+    padding: 14px 14px 8px 14px;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+}
+.login-info-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    background: #ffffff;
+    padding: 16px 18px;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+    margin-bottom: 12px;
+}
+.login-headline {
+    font-weight: 800;
+    font-size: 1.12rem;
+    color: #111827;
+    line-height: 1.45;
+    margin-bottom: 0.35rem;
+}
+.login-headline-th {
+    color: #4b5563;
+    font-size: 0.97rem;
+    line-height: 1.45;
+    margin-bottom: 0.75rem;
+}
+.login-paragraph {
+    color: #374151;
+    font-size: 0.95rem;
+    line-height: 1.65;
+    margin-bottom: 0.7rem;
+}
+.login-badge {
+    display: inline-block;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin-bottom: 0.55rem;
+}
+.feature-list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 8px;
+}
+.feature-item {
+    border: 1px solid #e5e7eb;
+    border-left: 4px solid #60a5fa;
+    border-radius: 12px;
+    padding: 10px 12px;
+    background: #f8fafc;
+}
+.feature-title {
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 0.2rem;
+    font-size: 0.93rem;
+}
+.feature-desc {
+    color: #4b5563;
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+.quote-box {
+    margin-top: 10px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f0f9ff, #f8fafc);
+    border: 1px dashed #93c5fd;
+    padding: 10px 12px;
+    color: #1f2937;
+    font-size: 0.93rem;
+    line-height: 1.55;
+}
+.quote-box strong {
+    color: #0f172a;
 }
 
-.login-title-center .subtitle {
-    margin-top: 8px;
-    color: #6b7280;
-    font-size: 1rem;
+/* ปรับ st.form ให้ดูเป็นการ์ดนุ่มขึ้น (ใช้กับหน้า login เป็นหลัก) */
+div[data-testid="stForm"] {
+    border-radius: 14px !important;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1200px) {
+    .login-title-center h1 {
+        font-size: 2.05rem;
+    }
+    .login-title-center .subtitle {
+        font-size: 1.0rem;
+    }
+    .logo-slot { height: 112px; }
+    .login-logo-left { height: 90px; transform: translateY(9px) scale(1.10); }
+    .login-logo-right { height: 100px; transform: translateY(7px) scale(0.95); }
+}
+
+@media (max-width: 900px) {
+    .login-logos {
+        gap: 1.1rem;
+        margin-bottom: 0.2rem;
+    }
+    .logo-slot { height: 98px; }
+    .login-logo-left { height: 80px; transform: translateY(7px) scale(1.06); }
+    .login-logo-right { height: 88px; transform: translateY(6px) scale(0.94); }
+    .login-title-center h1 {
+        font-size: 1.75rem;
+    }
+    .login-title-center .subtitle {
+        font-size: 0.95rem;
+    }
+    .login-headline {
+        font-size: 1.02rem;
+    }
+    .login-paragraph, .feature-desc {
+        font-size: 0.9rem;
+    }
+}
+
+@media (max-width: 640px) {
+    .block-container { padding-top: 0.7rem; }
+    .login-brand-wrap { margin-bottom: 0.25rem; }
+    .login-logos {
+        gap: 0.9rem;
+        flex-wrap: nowrap;
+    }
+    .logo-slot { height: 86px; }
+    .login-logo-left { height: 68px; transform: translateY(6px) scale(1.02); }
+    .login-logo-right { height: 76px; transform: translateY(5px) scale(0.92); }
+    .login-title-center h1 {
+        font-size: 1.45rem;
+    }
+    .login-title-center .subtitle {
+        font-size: 0.87rem;
+        line-height: 1.35;
+    }
+    .login-info-card {
+        padding: 12px 13px;
+        border-radius: 14px;
+    }
+    .login-panel-card {
+        padding: 12px 12px 6px 12px;
+    }
 }
 </style>
     """,
@@ -243,107 +351,139 @@ def ensure_auth_state():
 def render_login():
     ensure_auth_state()
 
-    # ส่วนบน: โลโก้ 2 อัน + ชื่อระบบตรงกลางใต้โลโก้
-    st.markdown(
-        f"""
-        <div class="login-brand-wrap">
-            <div class="login-logos">
-                <img class="login-logo login-logo-left"
-                     src="https://github.com/HOIARRTool/appqtbi/blob/main/messageImage_1763018963411.jpg?raw=1"
-                     alt="Logo 1" />
-                <img class="login-logo login-logo-right"
-                     src="https://mfu.ac.th/fileadmin/_processed_/6/7/csm_logo_mfu_3d_colour_15e5a7a50f.png"
-                     alt="Logo 2" />
-            </div>
+    app_title = html.escape(CFG["APP_TITLE"])
+    unit_name = html.escape(CFG["UNIT_NAME"])
 
-            <div class="login-title-center">
-                <h1>🏡 {CFG['APP_TITLE']}</h1>
+    hai_logo_url = "https://raw.githubusercontent.com/HOIARRTool/appqtbi/main/messageImage_1763018963411.jpg"
+    mfu_logo_url = "https://mfu.ac.th/fileadmin/_processed_/6/7/csm_logo_mfu_3d_colour_15e5a7a50f.png"
+
+    # --- Top center brand (logos + title) ---
+    st.markdown(
+        textwrap.dedent(
+            f"""
+            <div class="login-brand-wrap">
+              <div class="login-logos">
+                <div class="logo-slot">
+                  <img src="{hai_logo_url}" class="login-logo-left" alt="HAI logo">
+                </div>
+                <div class="logo-slot">
+                  <img src="{mfu_logo_url}" class="login-logo-right" alt="MFU logo">
+                </div>
+              </div>
+
+              <div class="login-title-center">
+                <h1>🏡 {app_title}</h1>
                 <div class="subtitle">บันทึกอุบัติการณ์ในสถานพยาบาลปฐมภูมิ</div>
+              </div>
             </div>
-        </div>
-        """,
+            <hr class="login-divider" />
+            """
+        ),
         unsafe_allow_html=True,
     )
 
-    st.markdown("---")
+    # --- Main login page layout: LEFT = login form, RIGHT = content ---
+    left_col, right_col = st.columns([1, 1.9], gap="large")
 
-    # ซ้าย = เนื้อหา, ขวา = กล่อง login เล็กด้านบน
-    left, right = st.columns([1.8, 1], gap="large")
+    with left_col:
+        st.markdown("<div class='login-panel-card'>", unsafe_allow_html=True)
+        st.markdown("### 🔐 เข้าสู่ระบบ")
+        st.caption(f"หน่วยงาน: **{unit_name}**")
 
-    with left:
+        with st.form("login_form", clear_on_submit=False):
+            username = st.text_input("ชื่อผู้ใช้", key="login_user_input")
+            password = st.text_input("รหัสผ่าน", type="password", key="login_pass_input")
+            submitted = st.form_submit_button("เข้าสู่ระบบ", use_container_width=True)
+
+        if submitted:
+            expected_user = CFG["APP_LOGIN_USERNAME"]
+            expected_pass = CFG["APP_LOGIN_PASSWORD"]
+
+            # ถ้ายังไม่ได้ตั้งค่า login ใน env ให้ bypass แบบ dev
+            if not expected_user or not expected_pass:
+                st.session_state.authenticated = True
+                st.session_state.login_username = username or "dev-user"
+                st.warning("ยังไม่ได้ตั้งค่า APP_LOGIN_USERNAME / APP_LOGIN_PASSWORD ใน ENV → เข้าแบบ dev mode")
+                st.rerun()
+
+            if username == expected_user and password == expected_pass:
+                st.session_state.authenticated = True
+                st.session_state.login_username = username
+                st.success("เข้าสู่ระบบสำเร็จ ✅")
+                st.rerun()
+            else:
+                st.error("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with right_col:
         st.markdown(
-            """
-<div class="hero-box">
-  <div class="hero-title">Empowering Primary Care: Learn from Every Event, Improve for Every Patient.</div>
-  <div class="hero-sub">(เสริมศักยภาพปฐมภูมิ เรียนรู้ทุกเหตุการณ์ เพื่อมาตรฐานการดูแลผู้ป่วยทุกคน)</div>
+            textwrap.dedent(
+                """
+                <div class="login-info-card">
+                  <div class="login-headline">
+                    Empowering Primary Care: Learn from Every Event, Improve for Every Patient.
+                  </div>
+                  <div class="login-headline-th">
+                    (เสริมศักยภาพปฐมภูมิ เรียนรู้ทุกเหตุการณ์ เพื่อมาตรฐานการดูแลผู้ป่วยทุกคน)
+                  </div>
 
-  <div class="hero-text">
-    ระบบนี้ถูกออกแบบมาเพื่อยกระดับความปลอดภัยในหน่วยบริการปฐมภูมิ เปลี่ยนทุกการรายงานอุบัติการณ์ให้เป็นข้อมูลเชิงลึก (Insight)
-    เพื่อสนับสนุนให้คนหน้างานบริหารความเสี่ยงและพัฒนาคุณภาพได้ด้วยตนเอง โดยต่อยอดจากบริบทและทรัพยากรที่มีอยู่จริงในพื้นที่
-  </div>
-
-  <br/>
-  <div class="hero-title" style="font-size:0.98rem;">สอดรับกับมาตรฐานสถานพยาบาลปฐมภูมิ (สรพ.)</div>
-  <div class="hero-text">
-    สนับสนุนการขับเคลื่อนคุณภาพตาม ตอนที่ III-(1) การบริหารความเสี่ยงและความปลอดภัย และ ตอนที่ III-(5) ระบบการจัดการด้านยา
-    มีเครื่องมือรองรับการจัดการความคลาดเคลื่อนทางยา (Medication Error) และเหตุการณ์ไม่พึงประสงค์อย่างเป็นระบบ
-  </div>
-
-  <br/>
-  <div class="hero-title" style="font-size:0.98rem;">เปลี่ยนข้อมูล สู่ความปลอดภัยที่ยั่งยืน:</div>
-  <div class="hero-text">
-    📝 <b>บันทึกง่าย ครอบคลุม (Record with Ease)</b>: รายงานความเสี่ยงได้รวดเร็ว ไม่เพิ่มภาระงาน<br/>
-    📊 <b>วิเคราะห์ได้ด้วยตัวเอง (Local Data Analysis)</b>: คืนข้อมูลสู่คนทำงาน เข้าถึง Dashboard เพื่อค้นหาสาเหตุรากเหง้า (Root Cause) ประเมินสถานการณ์ได้ทันที<br/>
-    🔄 <b>พัฒนาอย่างต่อเนื่อง (Continuous Improvement)</b>: ขับเคลื่อนการแก้ปัญหาด้วยข้อมูล (Data-Driven) ป้องกันการเกิดซ้ำอย่างตรงจุด
-  </div>
-
-  <div class="hero-quote">
-    "การรายงานไม่ได้มีไว้เพื่อจับผิด แต่มีไว้เพื่อเรียนรู้"
-  </div>
-  <div class="hero-text" style="margin-top:8px;">
-    ทุกข้อมูลคือโอกาส... มาร่วมสร้าง <b>วัฒนธรรมความปลอดภัย (Safety Culture)</b> ที่แข็งแกร่ง
-    เพื่อยกระดับมาตรฐานการดูแลพี่น้องประชาชนในชุมชนของคุณ
-  </div>
-</div>
-            """,
+                  <div class="login-paragraph">
+                    ระบบนี้ถูกออกแบบมาเพื่อยกระดับความปลอดภัยในหน่วยบริการปฐมภูมิ เปลี่ยนทุกการรายงานอุบัติการณ์ให้เป็นข้อมูลเชิงลึก (Insight) 
+                    เพื่อสนับสนุนให้คนหน้างานบริหารความเสี่ยงและพัฒนาคุณภาพได้ด้วยตนเอง โดยต่อยอดจากบริบทและทรัพยากรที่มีอยู่จริงในพื้นที่
+                  </div>
+                </div>
+                """
+            ),
             unsafe_allow_html=True,
         )
 
-    with right:
-        try:
-            login_box = st.container(border=True)
-        except TypeError:
-            login_box = st.container()
+        st.markdown(
+            textwrap.dedent(
+                """
+                <div class="login-info-card">
+                  <div class="login-badge">สอดรับกับมาตรฐานสถานพยาบาลปฐมภูมิ (สรพ.)</div>
+                  <div class="login-paragraph">
+                    สนับสนุนการขับเคลื่อนคุณภาพตาม <strong>ตอนที่ III-(1) การบริหารความเสี่ยงและความปลอดภัย</strong> 
+                    และ <strong>ตอนที่ III-(5) ระบบการจัดการด้านยา</strong> มีเครื่องมือรองรับการจัดการความคลาดเคลื่อนทางยา 
+                    (Medication Error) และเหตุการณ์ไม่พึงประสงค์อย่างเป็นระบบ
+                  </div>
 
-        with login_box:
-            st.markdown("### 🔐 เข้าสู่ระบบ")
-            st.caption(f"หน่วยงาน: **{CFG['UNIT_NAME']}**")
-            st.markdown(
-                "<div class='mini-note'>กรุณาเข้าสู่ระบบเพื่อบันทึกและติดตามข้อมูลอุบัติการณ์</div>",
-                unsafe_allow_html=True,
-            )
+                  <div class="login-paragraph" style="margin-bottom:0.35rem;">
+                    <strong>เปลี่ยนข้อมูล สู่ความปลอดภัยที่ยั่งยืน:</strong>
+                  </div>
 
-            username = st.text_input("ชื่อผู้ใช้", key="login_user_input")
-            password = st.text_input("รหัสผ่าน", type="password", key="login_pass_input")
+                  <div class="feature-list">
+                    <div class="feature-item">
+                      <div class="feature-title">📝 บันทึกง่าย ครอบคลุม (Record with Ease)</div>
+                      <div class="feature-desc">รายงานความเสี่ยงได้รวดเร็ว ไม่เพิ่มภาระงาน</div>
+                    </div>
 
-            if st.button("เข้าสู่ระบบ", use_container_width=True, key="btn_login_submit"):
-                expected_user = CFG["APP_LOGIN_USERNAME"]
-                expected_pass = CFG["APP_LOGIN_PASSWORD"]
+                    <div class="feature-item">
+                      <div class="feature-title">📊 วิเคราะห์ได้ด้วยตัวเอง (Local Data Analysis)</div>
+                      <div class="feature-desc">
+                        คืนข้อมูลสู่คนทำงาน เข้าถึง Dashboard เพื่อค้นหาสาเหตุรากเหง้า (Root Cause) ประเมินสถานการณ์ได้ทันที
+                      </div>
+                    </div>
 
-                # ถ้ายังไม่ได้ตั้งค่า login ใน env ให้ bypass แบบ dev
-                if not expected_user or not expected_pass:
-                    st.session_state.authenticated = True
-                    st.session_state.login_username = username or "dev-user"
-                    st.warning("ยังไม่ได้ตั้งค่า APP_LOGIN_USERNAME / APP_LOGIN_PASSWORD ใน ENV → เข้าแบบ dev mode")
-                    st.rerun()
+                    <div class="feature-item">
+                      <div class="feature-title">🔄 พัฒนาอย่างต่อเนื่อง (Continuous Improvement)</div>
+                      <div class="feature-desc">
+                        ขับเคลื่อนการแก้ปัญหาด้วยข้อมูล (Data-Driven) ป้องกันการเกิดซ้ำอย่างตรงจุด
+                      </div>
+                    </div>
+                  </div>
 
-                if username == expected_user and password == expected_pass:
-                    st.session_state.authenticated = True
-                    st.session_state.login_username = username
-                    st.success("เข้าสู่ระบบสำเร็จ ✅")
-                    st.rerun()
-                else:
-                    st.error("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
+                  <div class="quote-box">
+                    <strong>"การรายงานไม่ได้มีไว้เพื่อจับผิด แต่มีไว้เพื่อเรียนรู้"</strong><br>
+                    ทุกข้อมูลคือโอกาส... มาร่วมสร้าง <strong>วัฒนธรรมความปลอดภัย (Safety Culture)</strong> ที่แข็งแกร่ง
+                    เพื่อยกระดับมาตรฐานการดูแลพี่น้องประชาชนในชุมชนของคุณ
+                  </div>
+                </div>
+                """
+            ),
+            unsafe_allow_html=True,
+        )
 
 
 # =========================
@@ -739,11 +879,10 @@ def call_gemini_json(
             import base64
             img_bytes = image_file.getvalue()
             mime_type = getattr(image_file, "type", None) or "image/png"
-            # ✅ ใช้ inlineData (camelCase) สำหรับ Gemini REST
             parts.append(
                 {
-                    "inlineData": {
-                        "mimeType": mime_type,
+                    "inline_data": {
+                        "mime_type": mime_type,
                         "data": base64.b64encode(img_bytes).decode("utf-8"),
                     }
                 }
@@ -764,7 +903,6 @@ def call_gemini_json(
     }
 
     resp = requests.post(url, json=payload, timeout=timeout_sec)
-
     try:
         data = resp.json()
     except Exception:
@@ -774,41 +912,24 @@ def call_gemini_json(
         err_msg = data.get("error", {}).get("message", f"Gemini API error ({resp.status_code})")
         raise RuntimeError(err_msg)
 
-    # ดึงข้อความจาก parts แบบ robust (บางครั้งมีหลาย part / candidates ว่าง)
-    candidates = data.get("candidates") or []
-    if not candidates:
-        prompt_feedback = data.get("promptFeedback") or {}
-        block_reason = prompt_feedback.get("blockReason") or "ไม่ทราบสาเหตุ"
-        raise RuntimeError(f"Gemini ไม่ส่ง candidates กลับมา (blockReason={block_reason})")
-
-    first_candidate = candidates[0] or {}
-    content = first_candidate.get("content") or {}
-    content_parts = content.get("parts") or []
-
-    text_chunks: List[str] = []
-    for p in content_parts:
-        if isinstance(p, dict) and p.get("text"):
-            text_chunks.append(str(p.get("text")))
-
-    text = "\n".join(text_chunks).strip()
+    text = (
+        data.get("candidates", [{}])[0]
+        .get("content", {})
+        .get("parts", [{}])[0]
+        .get("text", "")
+    )
 
     if not text:
-        finish_reason = first_candidate.get("finishReason", "")
-        raise RuntimeError(f"Gemini ไม่ส่งข้อความผลลัพธ์กลับมา (finishReason={finish_reason})")
+        raise RuntimeError("Gemini ไม่ส่งผลลัพธ์กลับมา")
 
     # clean code fences if any
     cleaned = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.I)
     cleaned = re.sub(r"\s*```$", "", cleaned.strip())
 
     try:
-        parsed = json.loads(cleaned)
+        return json.loads(cleaned)
     except json.JSONDecodeError as e:
         raise RuntimeError(f"Gemini ส่ง JSON ไม่ถูกต้อง: {e}\n\nRaw response:\n{cleaned[:2000]}")
-
-    if not isinstance(parsed, dict):
-        raise RuntimeError("Gemini ส่งผลลัพธ์ JSON ที่ไม่ใช่ object")
-
-    return parsed
 
 
 def build_analysis_prompt(incident_text: str) -> str:
@@ -926,7 +1047,6 @@ def build_plan_prompt(incident_text: str, analysis_json: Dict[str, Any]) -> str:
 # =========================
 # FISHBONE SVG (EXECUTIVE-FRIENDLY)
 # =========================
-# หมายเหตุ: เก็บฟังก์ชันไว้ได้ แต่หน้าเว็บจะไม่แสดงรูปก้างปลาแล้ว (แสดงเฉพาะรายละเอียดข้อความ)
 
 def _wrap_by_chars(text: str, max_chars: int = 24, max_lines: int = 3) -> List[str]:
     s = str(text or "").strip()
@@ -1230,12 +1350,10 @@ def render_analysis_result(analysis: Dict[str, Any]):
 
     # 6) contributing factors
     factors = analysis.get("contributing_factors", []) or []
-    st.markdown("### 6) ปัจจัยเอื้อ/ปัจจัยร่วม")
     if factors:
+        st.markdown("### 6) ปัจจัยเอื้อ/ปัจจัยร่วม")
         for f in factors:
             st.markdown(f"- {f}")
-    else:
-        st.write("-")
 
 
 def render_plan_result(plan: Dict[str, Any]):
@@ -1527,13 +1645,11 @@ def render_entry_tab():
         )
 
         # ปุ่ม AI
-        if st.button("🧸 RCA Assistant", use_container_width=True, key="btn_rca_assistant"):
+        if st.button("🧸 RCA Assistant", use_container_width=True):
             incident_text = st.session_state.get("form_incident_detail", "").strip()
             if not incident_text:
                 st.warning("กรุณากรอกรายละเอียดเหตุการณ์ก่อน")
             else:
-                # ✅ แยก analysis กับ plan ออกจากกัน
-                # ถ้า plan พัง ก็ยังแสดง analysis ได้
                 try:
                     with st.spinner("กำลังวิเคราะห์ RCA..."):
                         analysis = call_gemini_json(
@@ -1542,25 +1658,16 @@ def render_entry_tab():
                             image_file=uploaded_rca_image,
                             timeout_sec=90,
                         )
+                        plan = call_gemini_json(
+                            prompt=build_plan_prompt(incident_text, analysis),
+                            api_key=CFG["GEMINI_API_KEY"],
+                            timeout_sec=90,
+                        )
 
-                        # บันทึก analysis ทันที
                         st.session_state.rca_analysis_json = analysis
-                        st.session_state.rca_plan_json = None
+                        st.session_state.rca_plan_json = plan
 
-                    # ลองสร้างแผนต่อ (ถ้าพังยังไม่ล้าง analysis)
-                    try:
-                        with st.spinner("กำลังสร้างแผนปฏิบัติการ / PDSA..."):
-                            plan = call_gemini_json(
-                                prompt=build_plan_prompt(incident_text, analysis),
-                                api_key=CFG["GEMINI_API_KEY"],
-                                timeout_sec=90,
-                            )
-                            st.session_state.rca_plan_json = plan
-
-                        st.success("วิเคราะห์และสร้างแผนเสร็จแล้ว ✅")
-                    except Exception as e_plan:
-                        st.warning(f"วิเคราะห์ RCA สำเร็จแล้ว แต่สร้างแผน PDSA ไม่สำเร็จ: {e_plan}")
-
+                    st.success("วิเคราะห์เสร็จแล้ว ✅")
                 except Exception as e:
                     st.error(f"RCA Assistant error: {e}")
 
