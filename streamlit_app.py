@@ -128,19 +128,6 @@ st.markdown(
     font-weight: 700;
     margin-bottom: .5rem;
 }
-.fishbone-wrap {
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 8px;
-    background: white;
-    overflow-x: auto;
-}
-.fishbone-preview-wrap {
-    border: 1px solid #cbd5e1;
-    border-radius: 14px;
-    background: #fff;
-    padding: 10px;
-}
 </style>
     """,
     unsafe_allow_html=True,
@@ -1011,55 +998,28 @@ def render_analysis_result(analysis: Dict[str, Any]):
     else:
         st.write("-")
 
-    # 3) Fishbone
-    st.markdown("### 3) แผนผังก้างปลา (Ishikawa)")
+    # 3) Fishbone (แสดงเฉพาะรายละเอียด ไม่แสดงภาพ)
+    st.markdown("### 3) แผนผังก้างปลา (Ishikawa) — รายละเอียด")
     fishbone = analysis.get("fishbone", {}) or {}
     effect = fishbone.get("effect", "") or analysis.get("event_summary", "เหตุการณ์ / ผลลัพธ์")
     categories = fishbone.get("categories", []) or []
 
-    svg = fishbone_svg(effect, categories)
+    st.markdown("**เหตุการณ์ / ผลลัพธ์**")
+    st.write(effect if str(effect).strip() else "-")
 
-    # พรีวิวปกติ
-    st.markdown("<div class='fishbone-wrap'>", unsafe_allow_html=True)
-    components.html(svg, height=780, scrolling=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # ปุ่มเปิดพรีวิวก้างปลาเดี่ยว (สำหรับแคปภาพ)
-    p1, p2 = st.columns([1.25, 1])
-    with p1:
-        if st.button("🖥️ เปิดหน้าพรีวิวก้างปลาเดี่ยว", key="btn_open_fishbone_preview"):
-            st.session_state.show_fishbone_preview = True
-            st.rerun()
-    with p2:
-        if st.session_state.get("show_fishbone_preview", False):
-            if st.button("❌ ปิดพรีวิวก้างปลาเดี่ยว", key="btn_close_fishbone_preview"):
-                st.session_state.show_fishbone_preview = False
-                st.rerun()
-
-    if st.session_state.get("show_fishbone_preview", False):
-        st.markdown("---")
-        st.markdown("### 🖥️ พรีวิวก้างปลาเดี่ยว (สำหรับแคปภาพ)")
-        st.caption("มุมมองนี้ขยายพื้นที่ให้เต็มมากขึ้น เพื่อให้ผู้ใช้แคปหน้าจอได้ชัดขึ้น")
-        st.markdown("<div class='fishbone-preview-wrap'>", unsafe_allow_html=True)
-        components.html(svg, height=900, scrolling=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        # แสดงข้อความหัวปลาเต็ม ๆ กันอ่านตก
-        if effect:
-            st.markdown("**ข้อความเหตุการณ์/ผลลัพธ์ (เต็ม):**")
-            st.write(effect)
-
-    # รายละเอียดสาเหตุทั้งหมด
     if categories:
-        with st.expander("ดูรายละเอียดสาเหตุทั้งหมด (ฉบับเต็ม)"):
-            cols = st.columns(2)
-            for idx, c in enumerate(categories):
-                with cols[idx % 2]:
-                    st.markdown(f"**{c.get('label','-')}**")
-                    items = c.get("items", []) or []
-                    for item in items:
-                        st.markdown(f"- {item}")
+        for idx, c in enumerate(categories, 1):
+            label = str(c.get("label", "") or "ไม่ระบุ").strip()
+            items = [str(x).strip() for x in (c.get("items", []) or []) if str(x).strip()]
 
+            st.markdown(f"**{idx}) {label}**")
+            if items:
+                for item in items:
+                    st.markdown(f"- {item}")
+            else:
+                st.markdown("- ไม่มีรายละเอียด")
+    else:
+        st.write("-")
     # 4) 5 Whys
     st.markdown("### 4) วิเคราะห์ทำไม-ทำไม (5 Whys)")
     whys = analysis.get("five_whys", []) or []
