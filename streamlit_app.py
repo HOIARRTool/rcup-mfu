@@ -1241,24 +1241,40 @@ def create_record_from_form(
     return record
 
 
-def clear_form_after_save():
-    st.session_state.form_drug_name = ""
-    st.session_state.form_incident_detail = ""
-    st.session_state.form_timeline_text = ""
-    st.session_state.form_initial_correction = ""
-    st.session_state.form_rca_text = ""
-    st.session_state.form_development_plan = ""
-    st.session_state.form_process_step = PROCESS_OPTIONS[0]
-    st.session_state.form_severity = "A"
-    st.session_state.form_event_date = date.today()
-    st.session_state.form_event_time = datetime.now().time().replace(second=0, microsecond=0)
-    st.session_state.rca_analysis_json = None
-    st.session_state.rca_plan_json = None
-    st.session_state.show_fishbone_preview = False
+def request_form_reset_after_save():
+    """ขอให้ล้างฟอร์มในรอบถัดไป (ห้ามล้างทันทีในรอบที่กดปุ่ม)"""
+    st.session_state["_reset_form_after_save"] = True
+    st.session_state["_save_success_message"] = "บันทึกข้อมูลสำเร็จ ✅"
+
+
+def apply_pending_form_reset():
+    """ถ้ามี flag ให้ล้างฟอร์มก่อนสร้าง widget"""
+    if st.session_state.get("_reset_form_after_save", False):
+        st.session_state["form_drug_name"] = ""
+        st.session_state["form_incident_detail"] = ""
+        st.session_state["form_timeline_text"] = ""
+        st.session_state["form_initial_correction"] = ""
+        st.session_state["form_rca_text"] = ""
+        st.session_state["form_development_plan"] = ""
+        st.session_state["form_process_step"] = PROCESS_OPTIONS[0]
+        st.session_state["form_severity"] = "A"
+        st.session_state["form_event_date"] = date.today()
+        st.session_state["form_event_time"] = datetime.now().time().replace(second=0, microsecond=0)
+        st.session_state["rca_analysis_json"] = None
+        st.session_state["rca_plan_json"] = None
+
+        # ถ้าต้องการเคลียร์ file_uploader ด้วย
+        st.session_state.pop("form_rca_image", None)
+
+        st.session_state["_reset_form_after_save"] = False
 
 
 def render_entry_tab():
     init_form_state_defaults()
+    apply_pending_form_reset()
+
+    if st.session_state.get("_save_success_message"):
+        st.success(st.session_state.pop("_save_success_message"))
 
     st.markdown("## 📝 บันทึกข้อมูล")
 
@@ -1329,12 +1345,15 @@ def render_entry_tab():
                 try:
                     record = create_record_from_form(uploaded_rca_image=uploaded_rca_image)
                     append_record_to_sheet(record)
-        
-                    # ❌ ลบบรรทัดนี้ออก
-                    # load_sheet_df.clear()
-        
-                    st.success("บันทึกข้อมูลสำเร็จ ✅")
-                    clear_form_after_save()
+                    
+                    # ถ้า load_sheet_df เป็น @st.cache_data ค่อยใช้ .clear()
+                    # ถ้าไม่ได้ cache ให้ลบบรรทัดนี้ทิ้งได้เลย
+                    try:
+                        load_sheet_df.clear()
+                    except Exception:
+                        pass
+                    
+                    request_form_reset_after_save()
                     st.rerun()
                 except Exception as e:
                     st.exception(e)
