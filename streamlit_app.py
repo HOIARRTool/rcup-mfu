@@ -251,19 +251,7 @@ st.markdown(
 /* ===== Login shell / hero ===== */
 .login-shell-wrapper hr { display: none !important; }
 
-.login-shell {
-    background:
-      radial-gradient(circle at 10% 10%, rgba(59,130,246,0.10), transparent 35%),
-      radial-gradient(circle at 92% 8%, rgba(34,197,94,0.08), transparent 30%),
-      linear-gradient(135deg, #f8fafc 0%, #eef2ff 45%, #f0fdf4 100%);
-    border: 1px solid #dbeafe;
-    border-radius: 22px;
-    padding: 14px 14px 12px 14px;
-    overflow: hidden;
-    position: relative;
-    margin-bottom: 8px;
-    box-shadow: none !important;
-}
+
 .login-shell::before {
     display: none !important;
     content: none !important;
