@@ -421,13 +421,6 @@ def render_login():
             textwrap.dedent(
                 """
                 <div class="login-info-card">
-                  <div class="login-headline">
-                    Empowering Primary Care: Learn from Every Event, Improve for Every Patient.
-                  </div>
-                  <div class="login-headline-th">
-                    (เสริมศักยภาพปฐมภูมิ เรียนรู้ทุกเหตุการณ์ เพื่อมาตรฐานการดูแลผู้ป่วยทุกคน)
-                  </div>
-
                   <div class="login-paragraph">
                     ระบบนี้ถูกออกแบบมาเพื่อยกระดับความปลอดภัยในหน่วยบริการปฐมภูมิ เปลี่ยนทุกการรายงานอุบัติการณ์ให้เป็นข้อมูลเชิงลึก (Insight) 
                     เพื่อสนับสนุนให้คนหน้างานบริหารความเสี่ยงและพัฒนาคุณภาพได้ด้วยตนเอง โดยต่อยอดจากบริบทและทรัพยากรที่มีอยู่จริงในพื้นที่
