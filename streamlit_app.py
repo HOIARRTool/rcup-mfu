@@ -1595,21 +1595,6 @@ def render_entry_tab():
         # รายละเอียดเหตุการณ์
         st.text_area("รายละเอียดเหตุการณ์", height=140, key="form_incident_detail")
 
-        # ✅ ย้าย uploader มาไว้ถัดจากรายละเอียดเหตุการณ์ + เปลี่ยนชื่อ label
-        uploaded_rca_image = st.file_uploader(
-            "แนบภาพประกอบ(หากมี)",
-            type=["png", "jpg", "jpeg", "webp"],
-            key="form_rca_image",
-            help="หากแนบไฟล์และกดบันทึก ระบบจะเก็บชื่อไฟล์และลิงก์ Google Drive ในชีต",
-        )
-
-        if uploaded_rca_image is not None:
-            st.image(
-                uploaded_rca_image,
-                caption=f"ภาพประกอบ: {uploaded_rca_image.name}",
-                use_container_width=True,
-            )
-
         st.markdown("---")
         st.markdown("### ข้อมูลเสริม (ก่อนบันทึก)")
         st.text_area("1) ไทม์ไลน์", height=120, key="form_timeline_text")
@@ -1962,12 +1947,6 @@ def check_required_env():
     if missing:
         st.error("ยังตั้งค่า Environment Variables ไม่ครบ: " + ", ".join(missing))
         st.stop()
-
-    if not str(CFG.get("GDRIVE_FOLDER_ID", "") or "").strip():
-        st.warning(
-            "ยังไม่ได้ตั้งค่า GDRIVE_FOLDER_ID → หากแนบภาพประกอบแล้วกดบันทึก ระบบจะอัปโหลดภาพไป Google Drive ไม่ได้"
-        )
-
 
 def main():
     ensure_auth_state()
