@@ -1946,20 +1946,13 @@ def render_history_tab():
             if str(row.get("rca_image_filename", "")).strip():
                 st.caption(f"แนบไฟล์ไว้ตอนบันทึก: {row.get('rca_image_filename')}")
 
-ช่วยให้โค้ดเพื่อแทนที่ตรงนี้ให้ที (กลัวงงและหลุด)
-
 # =========================
 # MAIN
 # =========================
 
 def render_header():
-    left_spacer, right_btn = st.columns([8.8, 1.2])
-    with right_btn:
-        if st.button("🚪 Logout", use_container_width=True):
-            st.session_state.authenticated = False
-            st.session_state.login_username = ""
-            st.session_state.show_fishbone_preview = False
-            st.rerun()
+    return
+
 
 def check_required_env():
     missing = []
@@ -1985,9 +1978,40 @@ def main():
         return
 
     check_required_env()
+    render_header()
 
-    render_header()    
+    # CSS เฉพาะปุ่ม logout ให้เล็กลงและดูเนียนขึ้น
+    st.markdown(
+        """
+        <style>
+        .logout-mini-wrap {
+            margin-top: 2px;
+            text-align: right;
+        }
+        .logout-mini-wrap div[data-testid="stButton"] > button {
+            padding: 0.25rem 0.55rem !important;
+            min-height: 32px !important;
+            font-size: 0.92rem !important;
+            border-radius: 8px !important;
+            white-space: nowrap !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
+    # แถวบนสุดสำหรับ Logout (ไม่เอา tabs ไว้ใน columns เพื่อเลี่ยง nested columns error)
+    _, logout_col = st.columns([14, 1.2], gap="small")
+    with logout_col:
+        st.markdown('<div class="logout-mini-wrap">', unsafe_allow_html=True)
+        if st.button("🚪 Logout", key="logout_inline"):
+            st.session_state.authenticated = False
+            st.session_state.login_username = ""
+            st.session_state.show_fishbone_preview = False
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # Tabs ต้องอยู่ top-level (สำคัญมาก)
     tab1, tab2 = st.tabs(["บันทึกข้อมูล", "ดูข้อมูลย้อนหลัง"])
 
     with tab1:
