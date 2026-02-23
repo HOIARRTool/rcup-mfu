@@ -234,7 +234,7 @@ st.markdown(
     """
 <style>
 .block-container { padding-top: 1rem; }
-.small-muted { color: #6b7280; font-size: 0.88rem; }
+.small-muted { color: #6b7280; font-size: 1rem; }
 .card {
     border: 1px solid #e5e7eb;
     border-radius: 14px;
@@ -327,11 +327,11 @@ st.markdown(
 .login-card-box h3 {
     margin-top: 0.1rem !important;
     margin-bottom: 0.35rem !important;
-    font-size: 1.15rem !important;
+    font-size: 1.5rem !important;
 }
 .login-card-box .login-head-note {
     color: #6b7280;
-    font-size: 0.86rem;
+    font-size: 1rem;
     margin-bottom: 0.5rem;
 }
 .login-card-box [data-testid="stTextInput"] label,
@@ -363,14 +363,14 @@ st.markdown(
     border: 1px solid #c7d2fe;
     color: #4338ca;
     font-weight: 700;
-    font-size: 0.82rem;
+    font-size: 1rem;
     margin-bottom: 0.55rem;
 }
 .login-paragraph {
     margin-bottom: 0.55rem;
     color: #1f2937;
     line-height: 1.55;
-    font-size: 0.94rem;
+    font-size: 1.2rem;
 }
 .feature-list {
     display: grid;
@@ -387,12 +387,12 @@ st.markdown(
     font-weight: 700;
     color: #1e3a8a;
     margin-bottom: 2px;
-    font-size: 0.91rem;
+    font-size: 1.2rem;
 }
 .feature-desc {
     color: #475569;
     line-height: 1.45;
-    font-size: 0.89rem;
+    font-size: 1.2rem;
 }
 .quote-box {
     border: 1px dashed #93c5fd;
@@ -401,7 +401,7 @@ st.markdown(
     padding: 9px 10px;
     color: #1e293b;
     line-height: 1.5;
-    font-size: 0.91rem;
+    font-size: 1.2rem;
 }
 
 /* Compact spacing on login widgets */
@@ -425,13 +425,13 @@ st.markdown(
     color: #111827;
 }
 .tiny {
-    font-size: 0.85rem;
+    font-size: 1rem;
     color: #6b7280;
 }
 
 @media (max-width: 1100px) {
     .login-title-center h1 { font-size: 1.72rem; }
-    .login-title-center .subtitle { font-size: 0.96rem; }
+    .login-title-center .subtitle { font-size: 1.2rem; }
     .logo-left-wrap { width: 94px; height: 78px; }
     .logo-right-wrap { width: 84px; height: 78px; }
     .logo-left-wrap img { max-width: 76px; max-height: 64px; }
@@ -448,9 +448,9 @@ st.markdown(
     .logo-left-wrap img { max-width: 62px; max-height: 56px; }
     .logo-right-wrap img { max-width: 52px; max-height: 56px; }
     .login-title-center h1 { font-size: 1.36rem; }
-    .login-title-center .subtitle { font-size: 0.88rem; }
+    .login-title-center .subtitle { font-size: 1rem; }
     .login-info-box, .login-card-box { border-radius: 14px; }
-    .login-paragraph { font-size: 0.9rem; }
+    .login-paragraph { font-size: 1.2rem; }
 }
 </style>
     """,
@@ -499,17 +499,15 @@ def render_login_info_panel():
         "</div>"
 
         "<div class='login-paragraph'>"
-        "ขับเคลื่อนคุณภาพตามมาตรฐานสถานพยาบาลปฐมภูมิ (สรพ.) ฉบับที่ 1<br>"
+        "ขับเคลื่อนคุณภาพตามมาตรฐานสถานพยาบาลปฐมภูมิ (สรพ.) ได้แก่<br>"
         "<strong>ตอนที่ 1.6 ข. การบริหารความเสี่ยงและจัดการความปลอดภัย</strong> และ <br>"
-        "<strong>ตอนที่ 4.3 การจัดการด้านยาและวัคซีน</strong> มีเครื่องมือรองรับ<br>"
+        "<strong>ตอนที่ 4.3 การจัดการด้านยาและวัคซีน</strong> โดยมีเครื่องมือรองรับ<br>"
         "การจัดการความคลาดเคลื่อนทางยา (Medication Error)<br> "
         "และเหตุการณ์ไม่พึงประสงค์ อย่างเป็นระบบ ตามมาตรฐาน<br>"
         "ข้อ 4.3 (ข.4) มีการเก็บรวบรวมข้อมูลความคลาดเคลื่อนทางยาและเหตุการณ์ไม่พึงประสงค์"
         "</div>"
-
-        "<div class='login-paragraph' style='margin-bottom:0.35rem;'>"
-        "<strong>เปลี่ยนข้อมูล สู่ความปลอดภัยที่ยั่งยืน:</strong>"
-        "</div>"
+        "<div class='login-info-box'>"
+        "<div class='login-badge'>เปลี่ยนข้อมูล สู่ความปลอดภัยที่ยั่งยืน</div>"
 
         "<div class='feature-list'>"
         "<div class='feature-item'>"
