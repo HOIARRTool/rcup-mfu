@@ -1952,17 +1952,13 @@ def render_history_tab():
 # =========================
 
 def render_header():
-    st.markdown(f"# 🏡 {CFG['APP_TITLE']}")
-    st.caption(f"หน่วยงานระบบ: {CFG['UNIT_NAME']}  |  บันทึกอุบัติการณ์ในสถานพยาบาลปฐมภูมิ")
-
-    c1, c2 = st.columns([1, 6])
-    with c1:
-        if st.button("🚪 Logout"):
+    left_spacer, right_btn = st.columns([8.8, 1.2])
+    with right_btn:
+        if st.button("🚪 Logout", use_container_width=True):
             st.session_state.authenticated = False
             st.session_state.login_username = ""
             st.session_state.show_fishbone_preview = False
             st.rerun()
-
 
 def check_required_env():
     missing = []
@@ -1989,8 +1985,7 @@ def main():
 
     check_required_env()
 
-    render_header()
-    st.markdown("---")
+    render_header()    
 
     tab1, tab2 = st.tabs(["บันทึกข้อมูล", "ดูข้อมูลย้อนหลัง"])
 
