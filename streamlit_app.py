@@ -29,7 +29,7 @@ from googleapiclient.http import MediaIoBaseUpload
 LOGO_HA_URL = "https://raw.githubusercontent.com/HOIARRTool/appqtbi/main/messageImage_1763018963411.jpg"
 
 UNIT_OPTIONS = [
-    "รพ.สต.รพ.ศูนย์การแพทย์มหาวิทยาลัยแม่ฟ้าหลวง",
+    "หน่วยบริการปฐมภูมิ MFU",
     "รพ.สต.แม่ข้าวต้ม",
     "รพ.สต.โล๊ะป่าห้า",
     "รพ.สต.ท่าสุด",
