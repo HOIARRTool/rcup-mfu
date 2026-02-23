@@ -1553,14 +1553,13 @@ def render_entry_tab():
     if st.session_state.get("_save_success_message"):
         st.success(st.session_state.pop("_save_success_message"))
 
-    st.markdown("## 📝 บันทึกข้อมูล")
 
     left, right = st.columns([1.18, 1], gap="large")
 
     uploaded_rca_image = None
 
     with left:
-        st.markdown("### ข้อมูลเหตุการณ์")
+        st.markdown("### 📝 บันทึกข้อมูล")
 
         # ✅ เพิ่มช่อง “หน่วย” ไว้บนสุด
         st.selectbox("หน่วย", UNIT_OPTIONS, key="form_service_unit")
