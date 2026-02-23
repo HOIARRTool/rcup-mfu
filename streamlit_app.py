@@ -479,7 +479,7 @@ def render_login_header_hero():
         "</div>"
         "<div class='login-title-center'>"
         f"<h1> {html.escape(CFG['APP_TITLE'])}</h1>"
-        "<div class='subtitle'>Primary Healthcare Occurence/Incident Report: บันทึกอุบัติการณ์ในสถานพยาบาลปฐมภูมิ</div>"
+        "<div class='title'><strong>P</strong>rimary <strong>H</strong>ealthcare <strong>O</strong>ccurence/<strong>I</strong>ncident <strong>R</strong>eport: บันทึกอุบัติการณ์ในสถานพยาบาลปฐมภูมิ</div>"
         "</div>"
         "</div>"
     )
