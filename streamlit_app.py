@@ -1946,19 +1946,14 @@ def render_history_tab():
             if str(row.get("rca_image_filename", "")).strip():
                 st.caption(f"แนบไฟล์ไว้ตอนบันทึก: {row.get('rca_image_filename')}")
 
-
 # =========================
 # MAIN
 # =========================
 
 def render_header():
-    left_spacer, right_btn = st.columns([8.8, 1.2])
-    with right_btn:
-        if st.button("🚪 Logout", use_container_width=True):
-            st.session_state.authenticated = False
-            st.session_state.login_username = ""
-            st.session_state.show_fishbone_preview = False
-            st.rerun()
+    # ไม่แสดง header ด้านบนแล้ว (คงฟังก์ชันไว้เพื่อไม่ให้กระทบส่วนอื่น)
+    return
+
 
 def check_required_env():
     missing = []
@@ -1985,9 +1980,24 @@ def main():
 
     check_required_env()
 
-    render_header()    
+    render_header()  # ตอนนี้ไม่แสดงอะไรแล้ว
 
-    tab1, tab2 = st.tabs(["บันทึกข้อมูล", "ดูข้อมูลย้อนหลัง"])
+    # แถวเดียวกัน: ซ้ายเป็นแท็บ / ขวาเป็นปุ่ม Logout (ขนาดเล็กลง)
+    tabs_col, logout_col = st.columns([12, 0.9], gap="small")
+
+    with tabs_col:
+        tab1, tab2 = st.tabs(["บันทึกข้อมูล", "ดูข้อมูลย้อนหลัง"])
+
+    with logout_col:
+        # ขยับลงมานิดเดียวให้เสมอแนวแท็บ
+        st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
+
+        # ไม่ใช้ use_container_width เพื่อให้ปุ่มเล็กตามข้อความ
+        if st.button("🚪 Logout", key="logout_inline"):
+            st.session_state.authenticated = False
+            st.session_state.login_username = ""
+            st.session_state.show_fishbone_preview = False
+            st.rerun()
 
     with tab1:
         render_entry_tab()
