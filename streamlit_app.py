@@ -36,10 +36,23 @@ UNIT_OPTIONS = [
     "รพ.สต.นางแล",
 ]
 
+# ✅ หน่วยที่เกี่ยวข้อง (เลือกได้หลายหน่วย)
+RELATED_UNIT_OTHER_LABEL = "รพ.อื่น....."
+RELATED_UNIT_OPTIONS = [
+    "โรงพยาบาลศูนย์การแพทย์มหาวิทยาลัยแม่ฟ้าหลวง",
+    *UNIT_OPTIONS,
+    RELATED_UNIT_OTHER_LABEL,
+]
+
+RELATED_UNITS_DELIM = "; "  # ✅ เก็บในชีตเป็นสตริงคั่นด้วย ; (อ่านง่าย + ค้นหาง่าย)
+
 # เก็บคอลัมน์เดิม + เพิ่มคอลัมน์ใหม่แบบ backward-compatible
 SHEET_COLUMNS = [
     "record_id",
-    "unit_name",                  # ใช้เก็บ “หน่วย” ที่ผู้ใช้เลือก
+    "unit_name",                  # ใช้เก็บ “หน่วยที่รายงาน” (เดิมชื่อหน่วย)
+    "related_unit",               # ✅ หน่วยที่เกี่ยวข้อง (หลายหน่วย) -> string join ด้วย ; 
+    "related_unit_other_text",    # ✅ free text กรณีเลือก "รพ.อื่น....."
+
     "app_title",
     "event_date",                 # YYYY-MM-DD
     "event_time",                 # HH:MM
@@ -700,6 +713,12 @@ def load_sheet_df() -> pd.DataFrame:
     if "severity_scheme" not in df.columns:
         df["severity_scheme"] = ""
 
+    # ✅ related columns for backward compatibility
+    if "related_unit" not in df.columns:
+        df["related_unit"] = ""
+    if "related_unit_other_text" not in df.columns:
+        df["related_unit_other_text"] = ""
+
     # เติม fallback จาก process_step ให้แถวเก่า
     df["event_code"] = df["event_code"].astype(str)
     df["event_topic"] = df["event_topic"].astype(str)
@@ -756,7 +775,7 @@ def upload_rca_image_to_drive(uploaded_file: Any, record_id: str) -> Dict[str, s
 
 
 # =========================
-# HELPERS: EVENT CODES / SEVERITY
+# HELPERS: EVENT CODES / SEVERITY + RELATED UNITS
 # =========================
 
 def event_code_options_for_group(group_name: str) -> List[str]:
@@ -802,6 +821,45 @@ def render_severity_guide(group_name: str):
         st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
 
 
+def resolve_related_units(selected_list: Any, other_text: str) -> List[str]:
+    raw = selected_list or []
+    if isinstance(raw, str):
+        raw = [raw]
+    out: List[str] = []
+    seen = set()
+
+    other_txt = str(other_text or "").strip()
+
+    for x in raw:
+        s = str(x or "").strip()
+        if not s:
+            continue
+        if s == RELATED_UNIT_OTHER_LABEL:
+            if other_txt:
+                if other_txt not in seen:
+                    out.append(other_txt)
+                    seen.add(other_txt)
+        else:
+            if s not in seen:
+                out.append(s)
+                seen.add(s)
+    return out
+
+
+def join_related_units(units: List[str]) -> str:
+    items = [str(x).strip() for x in (units or []) if str(x).strip()]
+    return RELATED_UNITS_DELIM.join(items)
+
+
+def parse_related_units_str(s: str) -> List[str]:
+    txt = str(s or "").strip()
+    if not txt:
+        return []
+    parts = [p.strip() for p in txt.split(";")]
+    parts = [p for p in parts if p]
+    return parts
+
+
 # =========================
 # DOCX EXPORT (BEFORE SAVE)
 # =========================
@@ -817,8 +875,13 @@ def build_docx_report_bytes(uploaded_rca_image: Optional[Any] = None) -> bytes:
     event_date_val = st.session_state.get("form_event_date", "")
     event_time_val = st.session_state.get("form_event_time", "")
     group_name = st.session_state.get("form_incident_group", "")
-    unit_name = st.session_state.get("form_service_unit", "")
+    unit_report = st.session_state.get("form_service_unit", "")
     sev = st.session_state.get("form_severity", "")
+
+    related_sel = st.session_state.get("form_related_units", [])
+    related_other = st.session_state.get("form_related_unit_other_text", "")
+    related_resolved = resolve_related_units(related_sel, related_other)
+    related_text = ", ".join(related_resolved) if related_resolved else ""
 
     if isinstance(event_date_val, date):
         event_date_text = event_date_val.isoformat()
@@ -845,7 +908,8 @@ def build_docx_report_bytes(uploaded_rca_image: Optional[Any] = None) -> bytes:
         row[0].text = str(k)
         row[1].text = str(v or "")
 
-    add_row("หน่วย", unit_name)
+    add_row("หน่วยที่รายงาน", unit_report)
+    add_row("หน่วยที่เกี่ยวข้อง", related_text)
     add_row("วันที่เกิดเหตุ", event_date_text)
     add_row("เวลาเกิดเหตุ", event_time_text)
     add_row("กลุ่มเหตุการณ์", group_name)
@@ -1324,7 +1388,10 @@ def render_plan_result(plan: Dict[str, Any]):
 
 def init_form_state_defaults():
     defaults = {
-        "form_service_unit": UNIT_OPTIONS[0],
+        "form_service_unit": UNIT_OPTIONS[0],                       # หน่วยที่รายงาน
+        "form_related_units": [UNIT_OPTIONS[0]],                    # ✅ หน่วยที่เกี่ยวข้อง (หลายหน่วย)
+        "form_related_unit_other_text": "",                         # ✅ free text
+
         "form_event_date": date.today(),
         "form_event_time": datetime.now().time().replace(second=0, microsecond=0),
 
@@ -1361,12 +1428,34 @@ def init_form_state_defaults():
     elif scheme == "A-I" and sev not in SEVERITY_OPTIONS_AI:
         st.session_state["form_severity"] = "A"
 
+    # ensure related units valid
+    sel = st.session_state.get("form_related_units", [])
+    if isinstance(sel, str):
+        sel = [sel]
+    sel = [x for x in sel if x in RELATED_UNIT_OPTIONS]
+    if not sel:
+        sel = [UNIT_OPTIONS[0]]
+    st.session_state["form_related_units"] = sel
+
 
 def validate_required_form() -> Tuple[bool, List[str]]:
     errs: List[str] = []
 
     if not str(st.session_state.get("form_service_unit", "")).strip():
-        errs.append("กรุณาเลือกหน่วย")
+        errs.append("กรุณาเลือกหน่วยที่รายงาน")
+
+    # ✅ related units: ต้องเลือกอย่างน้อย 1 หน่วย
+    related_sel = st.session_state.get("form_related_units", [])
+    if isinstance(related_sel, str):
+        related_sel = [related_sel]
+    related_sel = [str(x).strip() for x in (related_sel or []) if str(x).strip()]
+    if not related_sel:
+        errs.append("กรุณาเลือกหน่วยที่เกี่ยวข้องอย่างน้อย 1 หน่วย")
+    else:
+        if RELATED_UNIT_OTHER_LABEL in related_sel:
+            other_txt = str(st.session_state.get("form_related_unit_other_text", "")).strip()
+            if not other_txt:
+                errs.append("กรุณาระบุชื่อหน่วยที่เกี่ยวข้อง (กรณีเลือก รพ.อื่น.....)")
 
     group_name = str(st.session_state.get("form_incident_group", "")).strip()
     if not group_name:
@@ -1427,9 +1516,19 @@ def create_record_from_form(
     event_display = f"{event_code} | {event_topic}".strip(" |")
     sev_scheme = current_severity_scheme(group_name)
 
+    # ✅ related units -> resolve list แล้ว join ลงชีต
+    related_sel = st.session_state.get("form_related_units", [])
+    related_other = st.session_state.get("form_related_unit_other_text", "")
+    related_resolved = resolve_related_units(related_sel, related_other)
+    related_joined = join_related_units(related_resolved)
+
     record = {
         "record_id": now.strftime("%Y%m%d%H%M%S%f"),
-        "unit_name": st.session_state.get("form_service_unit", "").strip(),  # เก็บ “หน่วย” ที่เลือก
+
+        "unit_name": st.session_state.get("form_service_unit", "").strip(),  # หน่วยที่รายงาน
+        "related_unit": related_joined,                                      # ✅ หน่วยที่เกี่ยวข้อง (หลายหน่วย)
+        "related_unit_other_text": str(related_other or "").strip(),
+
         "app_title": CFG["APP_TITLE"],
 
         "event_date": event_date_str,
@@ -1468,6 +1567,9 @@ def request_form_reset_after_save():
 def apply_pending_form_reset():
     if st.session_state.get("_reset_form_after_save", False):
         st.session_state["form_service_unit"] = UNIT_OPTIONS[0]
+        st.session_state["form_related_units"] = [UNIT_OPTIONS[0]]      # ✅ reset related multi
+        st.session_state["form_related_unit_other_text"] = ""           # ✅ reset other text
+
         st.session_state["form_event_date"] = date.today()
         st.session_state["form_event_time"] = datetime.now().time().replace(second=0, microsecond=0)
         st.session_state["form_incident_group"] = INCIDENT_GROUP_OPTIONS[0]
@@ -1561,8 +1663,30 @@ def render_entry_tab():
     with left:
         st.markdown("### 📝 บันทึกข้อมูล")
 
-        # ✅ เพิ่มช่อง “หน่วย” ไว้บนสุด
-        st.selectbox("หน่วย", UNIT_OPTIONS, key="form_service_unit")
+        # ✅ หน่วยที่รายงาน + หน่วยที่เกี่ยวข้อง (multiselect) วางใกล้กัน
+        u1, u2 = st.columns([1, 1], gap="small")
+        with u1:
+            st.selectbox("หน่วยที่รายงาน", UNIT_OPTIONS, key="form_service_unit")
+        with u2:
+            st.multiselect(
+                "หน่วยที่เกี่ยวข้อง",
+                options=RELATED_UNIT_OPTIONS,
+                key="form_related_units",
+                help="เลือกได้หลายหน่วย (หากเลือก รพ.อื่น..... ให้กรอกชื่อเพิ่มเติม)",
+            )
+
+        # ✅ ถ้าเลือก "รพ.อื่น....." ให้มี free text
+        related_sel = st.session_state.get("form_related_units", [])
+        if isinstance(related_sel, str):
+            related_sel = [related_sel]
+        if RELATED_UNIT_OTHER_LABEL in (related_sel or []):
+            st.text_input(
+                "ระบุชื่อหน่วยที่เกี่ยวข้อง (รพ.อื่น)",
+                key="form_related_unit_other_text",
+                placeholder="พิมพ์ชื่อหน่วย/โรงพยาบาล…",
+            )
+        else:
+            st.session_state["form_related_unit_other_text"] = ""
 
         # วันที่ / เวลา
         c1, c2 = st.columns(2)
@@ -1665,7 +1789,7 @@ def render_entry_tab():
                         analysis = call_gemini_json(
                             prompt=build_analysis_prompt(incident_text),
                             api_key=CFG["GEMINI_API_KEY"],
-                            image_file=uploaded_rca_image,  # แนบภาพประกอบไปให้ AI ได้ (ถ้ามี)
+                            image_file=uploaded_rca_image,
                             timeout_sec=90,
                         )
                         plan = call_gemini_json(
@@ -1726,6 +1850,9 @@ def render_history_tab():
 
     df = parse_event_datetime_columns(df)
 
+    # ✅ สร้างคอลัมน์ list สำหรับ related units เพื่อใช้ filter แบบ any-match
+    df["_related_units_list"] = df.get("related_unit", "").astype(str).apply(parse_related_units_str)
+
     valid_dates_series = df["_event_date_dt"].dropna()
     if valid_dates_series.empty:
         min_d = date.today()
@@ -1751,12 +1878,12 @@ def render_history_tab():
             key="hist_sev",
         )
     with c4:
-        keyword = st.text_input("ค้นหา (รหัส/หัวข้อ/รายละเอียด)", key="hist_kw").strip()
+        keyword = st.text_input("ค้นหา (รหัส/หัวข้อ/รายละเอียด/หน่วย)", key="hist_kw").strip()
 
-    c5, c6 = st.columns([1, 2])
+    c5, c6, c7 = st.columns([1, 1.2, 1.6])
     with c5:
         unit_selected = st.multiselect(
-            "หน่วย",
+            "หน่วยที่รายงาน",
             options=sorted([x for x in df["unit_name"].dropna().astype(str).unique() if str(x).strip()]),
             default=[],
             key="hist_unit",
@@ -1767,6 +1894,15 @@ def render_history_tab():
             options=sorted([x for x in df["incident_group"].dropna().astype(str).unique() if str(x).strip()]),
             default=[],
             key="hist_group",
+        )
+    with c7:
+        # ✅ ดึงรายการหน่วยที่เกี่ยวข้องทั้งหมดจากการ split
+        all_related = sorted({u for lst in df["_related_units_list"].tolist() for u in (lst or []) if str(u).strip()})
+        related_selected = st.multiselect(
+            "หน่วยที่เกี่ยวข้อง",
+            options=all_related,
+            default=[],
+            key="hist_related",
         )
 
     if start_date > end_date:
@@ -1786,6 +1922,11 @@ def render_history_tab():
     if group_selected:
         m &= df["incident_group"].astype(str).isin(group_selected)
 
+    # ✅ filter related units: ถ้าเลือกหลายค่า -> keep row ที่มี ANY ตัวที่เลือก
+    if related_selected:
+        rs = set([str(x).strip() for x in related_selected if str(x).strip()])
+        m &= df["_related_units_list"].apply(lambda lst: any(x in (lst or []) for x in rs))
+
     if keyword:
         kw = keyword.lower()
         m &= (
@@ -1795,6 +1936,8 @@ def render_history_tab():
             | df["incident_detail"].astype(str).str.lower().str.contains(kw, na=False)
             | df["rca_text"].astype(str).str.lower().str.contains(kw, na=False)
             | df["development_plan"].astype(str).str.lower().str.contains(kw, na=False)
+            | df["unit_name"].astype(str).str.lower().str.contains(kw, na=False)
+            | df["related_unit"].astype(str).str.lower().str.contains(kw, na=False)
         )
 
     filtered = df[m].copy()
@@ -1814,7 +1957,7 @@ def render_history_tab():
             st.metric("จำนวนรายการ", f"{len(filtered):,}")
         with s2:
             st.metric(
-                "จำนวนหน่วย",
+                "จำนวนหน่วยที่รายงาน",
                 f"{filtered['unit_name'].astype(str).replace('', pd.NA).dropna().nunique():,}",
             )
         with s3:
@@ -1827,6 +1970,7 @@ def render_history_tab():
         "event_date",
         "event_time",
         "unit_name",
+        "related_unit",
         "incident_group",
         "event_code",
         "event_topic",
@@ -1853,7 +1997,8 @@ def render_history_tab():
         column_config={
             "event_date": "วันที่",
             "event_time": "เวลา",
-            "unit_name": "หน่วย",
+            "unit_name": "หน่วยที่รายงาน",
+            "related_unit": "หน่วยที่เกี่ยวข้อง",
             "incident_group": "กลุ่มเหตุการณ์",
             "event_code": "รหัสเหตุการณ์",
             "event_topic": "หัวข้อเหตุการณ์",
@@ -1901,7 +2046,8 @@ def render_history_tab():
             row = preview.iloc[int(selected_idx)]
 
             st.markdown("### ข้อมูลเหตุการณ์")
-            st.write(f"**หน่วย:** {row.get('unit_name','')}")
+            st.write(f"**หน่วยที่รายงาน:** {row.get('unit_name','')}")
+            st.write(f"**หน่วยที่เกี่ยวข้อง:** {row.get('related_unit','')}")
             st.write(f"**กลุ่มเหตุการณ์:** {row.get('incident_group','')}")
             st.write(f"**รหัสเหตุการณ์:** {row.get('event_code','')}")
             st.write(f"**หัวข้อเหตุการณ์:** {row.get('event_topic','')}")
@@ -1929,6 +2075,7 @@ def render_history_tab():
 
             if str(row.get("rca_image_filename", "")).strip():
                 st.caption(f"แนบไฟล์ไว้ตอนบันทึก: {row.get('rca_image_filename')}")
+
 
 # =========================
 # MAIN
