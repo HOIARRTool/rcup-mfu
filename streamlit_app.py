@@ -1389,7 +1389,7 @@ def render_plan_result(plan: Dict[str, Any]):
 def init_form_state_defaults():
     defaults = {
         "form_service_unit": UNIT_OPTIONS[0],                       # หน่วยที่รายงาน
-        "form_related_units": [UNIT_OPTIONS[0]],                    # ✅ หน่วยที่เกี่ยวข้อง (หลายหน่วย)
+        "form_related_units": [],                                  # ✅ หน่วยที่เกี่ยวข้อง (หลายหน่วย)
         "form_related_unit_other_text": "",                         # ✅ free text
 
         "form_event_date": date.today(),
@@ -1433,8 +1433,6 @@ def init_form_state_defaults():
     if isinstance(sel, str):
         sel = [sel]
     sel = [x for x in sel if x in RELATED_UNIT_OPTIONS]
-    if not sel:
-        sel = [UNIT_OPTIONS[0]]
     st.session_state["form_related_units"] = sel
 
 
@@ -1444,18 +1442,17 @@ def validate_required_form() -> Tuple[bool, List[str]]:
     if not str(st.session_state.get("form_service_unit", "")).strip():
         errs.append("กรุณาเลือกหน่วยที่รายงาน")
 
-    # ✅ related units: ต้องเลือกอย่างน้อย 1 หน่วย
+    # ✅ related units: "ไม่บังคับเลือก"
     related_sel = st.session_state.get("form_related_units", [])
     if isinstance(related_sel, str):
         related_sel = [related_sel]
     related_sel = [str(x).strip() for x in (related_sel or []) if str(x).strip()]
-    if not related_sel:
-        errs.append("กรุณาเลือกหน่วยที่เกี่ยวข้องอย่างน้อย 1 หน่วย")
-    else:
-        if RELATED_UNIT_OTHER_LABEL in related_sel:
-            other_txt = str(st.session_state.get("form_related_unit_other_text", "")).strip()
-            if not other_txt:
-                errs.append("กรุณาระบุชื่อหน่วยที่เกี่ยวข้อง (กรณีเลือก รพ.อื่น.....)")
+    
+    # ถ้าเลือก "รพ.อื่น....." ให้บังคับกรอกชื่อ
+    if RELATED_UNIT_OTHER_LABEL in related_sel:
+        other_txt = str(st.session_state.get("form_related_unit_other_text", "")).strip()
+        if not other_txt:
+            errs.append("กรุณาระบุชื่อหน่วยที่เกี่ยวข้อง (กรณีเลือก รพ.อื่น.....)")
 
     group_name = str(st.session_state.get("form_incident_group", "")).strip()
     if not group_name:
@@ -1567,7 +1564,7 @@ def request_form_reset_after_save():
 def apply_pending_form_reset():
     if st.session_state.get("_reset_form_after_save", False):
         st.session_state["form_service_unit"] = UNIT_OPTIONS[0]
-        st.session_state["form_related_units"] = [UNIT_OPTIONS[0]]      # ✅ reset related multi
+        st.session_state["form_related_units"] == []                    # ✅ reset related multi
         st.session_state["form_related_unit_other_text"] = ""           # ✅ reset other text
 
         st.session_state["form_event_date"] = date.today()
